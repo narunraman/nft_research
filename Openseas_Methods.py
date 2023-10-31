@@ -10,6 +10,7 @@ from collections import defaultdict
 import datetime
 from tqdm import tqdm
 import urllib
+from psql_methods import execute_commands
 
 API_KEYS = ("c113e12504b14e0185b714dcd72d6110", "55544646a70c491c80991e0666e7dbf6")
 
@@ -75,6 +76,28 @@ def Stats_api_request(collection, API_KEY = API_KEYS[0]):
         "X-API-KEY": API_KEY
         }
         response = requests.get(url, headers=headers)
+        if response.status_code == 429:
+            print('error')
+            print(response)
+            time.sleep(3)
+        elif response.status_code!=200:
+            print('error')
+            print(response)
+            return None
+        else:
+            no_response =False
+    return response
+
+def image_api_request(collection,next_curr, API_KEY = API_KEYS[0]):
+    no_response = True
+    while(no_response):
+        url = f"https://api.opensea.io/api/v2/collection/{collection}/nfts"
+        headers = {
+        "accept": "application/json",
+        "X-API-KEY": API_KEY
+        }
+        querystring = {"next":str(next_curr),"limit":200}
+        response = requests.get(url, headers=headers,params=querystring)
         if response.status_code == 429:
             print('error')
             print(response)
@@ -161,6 +184,28 @@ def pull_nft_stats(nft_list,dbname='NFTDB',API_KEY = API_KEYS[0]):
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
         response_dict['_id'] = {'slug':nft,'timestamp':timestamp}
         stat_collection.insert_one(response_dict)
+
+def pull_nft_images(slug,API_KEY = API_KEYS[0]):
+    next_cur = ''
+    command = "INSERT INTO nfttoimage (slug, token_id, url) VALUES (%s, %s, %s) returning token_id"
+    commands = []
+    data_list = []
+    while next_cur is not None:
+        response = image_api_request(slug,next_cur, API_KEY)
+        try:
+            next_cur = response.json()['next']
+        except:
+            # print(response.json())
+            next_cur=None
+        # print(next_cur)
+        for record in response.json()['nfts']:
+            response_dict = dict(record)
+            if response_dict['image_url'] is None:
+                continue
+            data = (slug,int(response_dict['identifier']),response_dict['image_url'])
+            commands.append(command)
+            data_list.append(data)
+    execute_commands(commands,data_list)
         
 def edge_counts_to_percent(edge_list,minimum =True,dbname='NFTDB'):
     client = MongoClient()

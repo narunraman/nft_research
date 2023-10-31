@@ -50,7 +50,7 @@ def connect():
             conn.close()
             print('Database connection closed.')
 
-def execute_commands(commands):
+def execute_commands(commands,data_list=None):
     conn = None
     try:
         # read the connection parameters
@@ -59,12 +59,18 @@ def execute_commands(commands):
         conn = psycopg2.connect(**params)
         cur = conn.cursor()
         # create table one by one
-        for command in commands:
-            cur.execute(command)
+        if data_list is None:
+            for command in commands:
+                cur.execute(command)
+        else:
+            for command,data in zip(commands,data_list):
+                cur.execute(command,data)
         # close communication with the PostgreSQL database server
+        rows = cur.fetchall()
         cur.close()
         # commit the changes
         conn.commit()
+        return rows
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
     finally:
