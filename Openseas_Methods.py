@@ -110,10 +110,54 @@ def image_api_request(collection,next_curr, API_KEY = API_KEYS[0]):
             no_response =False
     return response
 
+def contract_api_request(collection,next_curr=None, API_KEY = API_KEYS[0]):
+    no_response = True
+    while(no_response):
+        url = f"https://api.opensea.io/api/v2/collections/{collection}"
+        headers = {
+        "accept": "application/json",
+        "X-API-KEY": API_KEY
+        }
+        querystring = {"next":str(next_curr),"limit":200}
+        response = requests.get(url, headers=headers,params=querystring)
+        if response.status_code == 429:
+            print('error')
+            print(response)
+            time.sleep(3)
+        elif response.status_code!=200:
+            print('error')
+            print(response)
+            return None
+        else:
+            no_response =False
+    return response
+
 
 
     
-def NFT_api_request(address, next_curr = "", API_KEY = API_KEYS[0],timeout=3):
+def wall_to_NFT_api_request(address, next_curr = "", API_KEY = API_KEYS[0],timeout=3):
+    no_response = True
+    while(no_response):
+        url = f"https://api.opensea.io/v2/chain/ethereum/account/{address}/nfts"
+        headers = {
+        "accept": "application/json",
+        "X-API-KEY": API_KEY
+        }
+        querystring = {"next":str(next_curr)}
+        response = requests.get(url, headers=headers,params=querystring)
+        if response.status_code == 429:
+            print('error')
+            print(response)
+            time.sleep(timeout)
+        elif response.status_code!=200:
+            print('error')
+            print(response)
+            return None
+        else:
+            no_response =False
+    return response
+
+def NFT_to_wall_api_request(address, next_curr = "", API_KEY = API_KEYS[0],timeout=3):
     no_response = True
     while(no_response):
         url = f"https://api.opensea.io/v2/chain/ethereum/account/{address}/nfts"
@@ -198,14 +242,32 @@ def pull_nft_images(slug,API_KEY = API_KEYS[0]):
             # print(response.json())
             next_cur=None
         # print(next_cur)
-        for record in response.json()['nfts']:
-            response_dict = dict(record)
-            if response_dict['image_url'] is None:
-                continue
-            data = (slug,int(response_dict['identifier']),response_dict['image_url'])
-            commands.append(command)
-            data_list.append(data)
+        try:
+            for record in response.json()['nfts']:
+                response_dict = dict(record)
+                if response_dict['image_url'] is None:
+                    continue
+                data = (slug,int(response_dict['identifier']),response_dict['image_url'])
+                commands.append(command)
+                data_list.append(data)
+        except:
+            return None
     execute_commands(commands,data_list)
+
+def pull_nft_contracts(slug,API_KEY = API_KEYS[0]):
+    next_cur = ''
+    command = "INSERT INTO collectiontoaddress (slug, address) VALUES (%s, %s) returning slug"
+    response = contract_api_request(slug,next_cur, API_KEY)
+    try:
+        response_dict = dict(response.json())
+    except:
+        print(f'{slug} failed to find contract')
+        return None
+    try:
+        data = (slug,response_dict['contracts'][0]['address'])
+    except:
+        data = (slug,None)
+    execute_commands([command],[data])
         
 def edge_counts_to_percent(edge_list,minimum =True,dbname='NFTDB'):
     client = MongoClient()

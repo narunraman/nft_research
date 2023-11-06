@@ -1,4 +1,10 @@
 .DS_Store
-mongo_csvs/.ipynb_checkpoints/addresstoNFT-checkpoint.csv mongo_csvs/.ipynb_checkpoints/BotAddress-checkpoint.csv mongo_csvs/.ipynb_checkpoints/completedSlugsListings-checkpoint.csv mongo_csvs/.ipynb_checkpoints/completedSlugsTransfers-checkpoint.csv mongo_csvs/.ipynb_checkpoints/listingsCollection-checkpoint.csv mongo_csvs/.ipynb_checkpoints/NFTStats-checkpoint.csv mongo_csvs/.ipynb_checkpoints/salesCollectionV2-checkpoint.csv mongo_csvs/.ipynb_checkpoints/slugCollection-checkpoint.csv
-bipartite_graph.gexf graph2.gexf graph.gexf__pycache__/API_Opensea.cpython-39.pyc 
-__pycache__/decision_tree.cpython-38.pyc __pycache__/Openseas_Methods.cpython-38.pyc __pycache__/Openseas_Methods.cpython-39.pyc __pycache__/parsing_helpers.cpython-38.pyc __pycache__/parsing_helpers.cpython-39.pyc __pycache__/psql_config.cpython-38.pyc __pycache__/psql_methods.cpython-38.pyc __pycache__/Slug_to_events.cpython-39.pyc
+mongo_csvs/*
+*.gexf
+__pycache__/
+*.pyc
+**/__pycache__/
+.ipynb_checkpoints
+**/.ipynb_checkpoints/
+Dino/images/*
+Dino/images.zip

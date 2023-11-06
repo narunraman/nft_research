@@ -26,7 +26,17 @@ import logging
 import utils
 import vision_transformer as vits
 
-
+def get_labels(data_path):
+    transform = pth_transforms.Compose([
+        pth_transforms.Resize(256, interpolation=3),
+        pth_transforms.CenterCrop(224),
+        pth_transforms.ToTensor(),
+        pth_transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ])
+    dataset_val = ReturnIndexDataset(os.path.join(data_path, "val"),transform = transform)
+    test_labels = torch.tensor([s[-1] for s in dataset_val.samples]).long()
+    return test_labels
+    
 def extract_feature_pipeline(model,data_path,out_path):
     # ============ preparing data ... ============
     transform = pth_transforms.Compose([
