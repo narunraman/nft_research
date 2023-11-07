@@ -37,7 +37,7 @@ def get_labels(data_path):
     test_labels = torch.tensor([s[-1] for s in dataset_val.samples]).long()
     return test_labels
     
-def extract_feature_pipeline(model,data_path,out_path):
+def extract_feature_pipeline(model,data_path,out_path,use_cuda=False):
     # ============ preparing data ... ============
     transform = pth_transforms.Compose([
         pth_transforms.Resize(256, interpolation=3),
@@ -55,12 +55,13 @@ def extract_feature_pipeline(model,data_path,out_path):
     )
     print(f"Data loaded with {len(dataset_val)} val imgs.")
     model.eval()
+    model.cuda()
     # os.environ['MASTER_ADDR'] = '127.0.0.1'
     # os.environ['MASTER_PORT'] = '29500'
 
     # ============ extract features ... ============
     print("Extracting features for val set...")
-    test_features = extract_features(model, data_loader_val)
+    test_features = extract_features(model, data_loader_val,use_cuda)
 
     if utils.get_rank() == 0:
         test_features = nn.functional.normalize(test_features, dim=1, p=2)
@@ -78,7 +79,7 @@ def init_group():
     )
     
 @torch.no_grad()
-def extract_features(model, data_loader, use_cuda=False, multiscale=False):
+def extract_features(model, data_loader, use_cuda, multiscale=False):
     metric_logger = utils.MetricLogger(delimiter="  ")
     features = None
 
@@ -87,8 +88,9 @@ def extract_features(model, data_loader, use_cuda=False, multiscale=False):
     logging.basicConfig(filename='logs/feature_extract.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     for samples, index in metric_logger.log_every(data_loader, 1):
-        # samples = samples.cuda(non_blocking=True)
-        # index = index.cuda(non_blocking=True)
+        if use_cuda:
+            samples = samples.cuda(non_blocking=True)
+            index = index.cuda(non_blocking=True)
         # print(samples)
         print(index)
         logging.info(f'Currently working on {index}')
