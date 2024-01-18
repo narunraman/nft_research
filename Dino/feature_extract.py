@@ -27,15 +27,16 @@ import utils
 import vision_transformer as vits
 
 def get_labels(data_path):
-    transform = pth_transforms.Compose([
-        pth_transforms.Resize(256, interpolation=3),
-        pth_transforms.CenterCrop(224),
-        pth_transforms.ToTensor(),
-        pth_transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-    ])
-    dataset_val = ReturnIndexDataset(os.path.join(data_path, "val"),transform = transform)
+    dataset_val = ReturnIndexDataset(os.path.join(data_path, "val"))
     test_labels = torch.tensor([s[-1] for s in dataset_val.samples]).long()
     return test_labels
+
+def get_filenames(data_path):
+    dataset_val = ReturnIndexDataset(os.path.join(data_path, "val"))
+    print(dataset_val)
+    file_paths = [s[0] for s in dataset_val.samples]
+    result_tuples = [(os.path.basename(os.path.dirname(path)), os.path.splitext(os.path.basename(path))[0]) for path in file_paths]
+    return result_tuples
     
 def extract_feature_pipeline(model,data_path,out_path,use_cuda=False):
     # ============ preparing data ... ============
@@ -58,7 +59,7 @@ def extract_feature_pipeline(model,data_path,out_path,use_cuda=False):
     model.cuda()
     # os.environ['MASTER_ADDR'] = '127.0.0.1'
     # os.environ['MASTER_PORT'] = '29500'
-
+    test_labels = torch.tensor([s[-1] for s in dataset_val.samples]).long()
     # ============ extract features ... ============
     print("Extracting features for val set...")
     test_features = extract_features(model, data_loader_val,use_cuda)
@@ -68,7 +69,7 @@ def extract_feature_pipeline(model,data_path,out_path,use_cuda=False):
 
     
     torch.save(test_features.cpu(), os.path.join(out_path, "testfeat.pth"))
-    return test_features
+    return test_features,test_labels
 
 def init_group():
     dist.init_process_group(
@@ -92,7 +93,7 @@ def extract_features(model, data_loader, use_cuda, multiscale=False):
             samples = samples.cuda(non_blocking=True)
             index = index.cuda(non_blocking=True)
         # print(samples)
-        print(index)
+        # print(index)
         logging.info(f'Currently working on {index}')
         if multiscale:
             feats = utils.multi_scale(samples, model)
@@ -124,7 +125,6 @@ def extract_features(model, data_loader, use_cuda, multiscale=False):
         output_l = list(feats_all.unbind(0))
         output_all_reduce = torch.distributed.all_gather(output_l, feats, async_op=True)
         output_all_reduce.wait()
-        # index_all[2]=2
         # update storage feature matrix
         if dist.get_rank() == 0:
             features.index_copy_(0, index_all, torch.cat(output_l))

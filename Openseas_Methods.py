@@ -12,7 +12,7 @@ from tqdm import tqdm
 import urllib
 from psql_methods import execute_commands
 
-API_KEYS = ("c113e12504b14e0185b714dcd72d6110", "55544646a70c491c80991e0666e7dbf6")
+API_KEYS = ("c113e12504b14e0185b714dcd72d6110", "55544646a70c491c80991e0666e7dbf6","507741952944434a9234438b7707b358")
 
 def event_api_request(event_type=None,collection_slug=None,account_address=None,next="", API_KEY =API_KEYS[0],after=None,before=None):
     no_response = True
@@ -67,22 +67,24 @@ def active_listing_api_request(collection_slug=None, next="",  API_KEY=API_KEYS[
             no_response = False
     return response
 
-def Stats_api_request(collection, API_KEY = API_KEYS[0]):
+def Stats_api_request(collection, API_KEY = API_KEYS[0],verbose=False):
     no_response = True
     while(no_response):
-        url = f"https://api.opensea.io/api/v1/collection/{collection}/stats"
+        url = f"https://api.opensea.io/api/v2/collections/{collection}/stats"
         headers = {
         "accept": "application/json",
         "X-API-KEY": API_KEY
         }
         response = requests.get(url, headers=headers)
         if response.status_code == 429:
-            print('error')
-            print(response)
+            if verbose:
+                print('error')
+                print(response)
             time.sleep(3)
         elif response.status_code!=200:
-            print('error')
-            print(response)
+            if verbose:
+                print('error')
+                print(response)
             return None
         else:
             no_response =False
@@ -217,17 +219,24 @@ def pull_listing_data(collection_slug=None, total_queries=100000, query_size=100
             return None
             
 
-def pull_nft_stats(nft_list,dbname='NFTDB',API_KEY = API_KEYS[0]):
-    client = MongoClient()
-    db = client[dbname]
-    stat_collection = db.NFTStats
+def pull_nft_stats(nft_list,dbname='NFTDB',API_KEY = API_KEYS[2],no_save=False,fill_none=True):
+    #TODO make this method databse compliant
+    command = ""
+    response_list = []
     for nft in tqdm(nft_list):
         response = Stats_api_request(nft, API_KEY)
-        response_dict = dict(response.json()['stats'])
+        try:
+            response_dict = dict(response.json()['total'])
+        except:
+            continue
         response_dict['slug']=nft
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
         response_dict['_id'] = {'slug':nft,'timestamp':timestamp}
-        stat_collection.insert_one(response_dict)
+        response_list.append(response_dict)
+    if no_save:
+        return response_list
+    else:
+        execute_commands([command],response_list)
 
 def pull_nft_images(slug,API_KEY = API_KEYS[0]):
     next_cur = ''
@@ -254,7 +263,7 @@ def pull_nft_images(slug,API_KEY = API_KEYS[0]):
             return None
     execute_commands(commands,data_list)
 
-def pull_nft_contracts(slug,API_KEY = API_KEYS[0]):
+def pull_nft_contracts(slug,no_save=False,API_KEY = API_KEYS[0]):
     next_cur = ''
     command = "INSERT INTO collectiontoaddress (slug, address) VALUES (%s, %s) returning slug"
     response = contract_api_request(slug,next_cur, API_KEY)
@@ -267,6 +276,8 @@ def pull_nft_contracts(slug,API_KEY = API_KEYS[0]):
         data = (slug,response_dict['contracts'][0]['address'])
     except:
         data = (slug,None)
+    if no_save:
+        return data
     execute_commands([command],[data])
         
 def edge_counts_to_percent(edge_list,minimum =True,dbname='NFTDB'):
