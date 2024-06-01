@@ -9,7 +9,9 @@ from network_utils import *
 from GraphDataset import GraphDataset
 
 print('Starting script')
-dataset = GraphDataset('dataset_stor/graph_dataset_4',normalize=True)
+dataset = GraphDataset('dataset_stor/graph_dataset_4/graphs')
+
+
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 

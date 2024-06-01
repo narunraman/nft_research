@@ -132,7 +132,7 @@ def plot_test(model,graph,mask,criterion,bin=False):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     graph = graph.to(device)
     out = model(graph)
-    new_tensor = torch.full_like(out, 50)
+    new_tensor = torch.full_like(out, 45)
     loss = criterion(out[mask], graph.y[mask].unsqueeze(1))
     r_loss = criterion(new_tensor[mask], graph.y[mask].unsqueeze(1))
     print(f"Model Loss:{loss}")
@@ -150,3 +150,4 @@ def plot_test(model,graph,mask,criterion,bin=False):
     plt.scatter(x, y,alpha=0.1)
     plt.ylim(top=100,bottom=0)
     # plt.xlim(top=0.2,bottom=0)
+    return loss.item(),r_loss.item()
