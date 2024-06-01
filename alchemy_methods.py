@@ -9,9 +9,9 @@ import networkx as nx
 from collections import defaultdict
 import datetime
 from tqdm import tqdm
-from Openseas_Methods import *
+from opensea_methods import *
 import logging
-
+import psql_methods as psql
 
 API_KEYS = ("-dkhE3R5RIFr9b9KUhpp4pqlQFzpPFzW")
 
@@ -68,25 +68,40 @@ def labels_to_contracts(labels):
         contracts.append(pull_nft_contracts(label,no_save=True))
     return contracts
         
-def contracts_to_owners(contracts,just_labels=False):
+def contracts_to_owners(contracts,just_labels=False,token_ids=True):
     #Expects a list of tuples of (slug,contract) or if just labels (slugs)
     label_to_owners = {}
+    label_tuples = []
     if just_labels:
         contracts = labels_to_contracts(contracts)
     for label,contract in tqdm(contracts):
-        url = f"https://eth-mainnet.g.alchemy.com/nft/v3/-dkhE3R5RIFr9b9KUhpp4pqlQFzpPFzW/getOwnersForContract?contractAddress={contract}&withTokenBalances=false"
+        url = f"https://eth-mainnet.g.alchemy.com/nft/v3/-dkhE3R5RIFr9b9KUhpp4pqlQFzpPFzW/getOwnersForContract?contractAddress={contract}&withTokenBalances={token_ids}"
         headers = {"accept": "application/json"}
         response = requests.get(url, headers=headers)
         try:
-            label_to_owners[label] = response.json()['owners']
+            owners = response.json()['owners']
         except:
-            print(f'Error on label {label}')
+            print(response.json())
+            continue
+        if not token_ids:
+            label_to_owners[label] = owners
+        else: 
+            
+            command = "Insert into slug_to_token (slug,address,token_id) values %s"
+            for owner in owners:
+                for token in owner['tokenBalances']:
+                    label_tuples.append((label,owner["ownerAddress"],token['tokenId']))
+            if len(label_tuples)>250000:
+                psql.batch_insert_fast(command,label_tuples) 
+                label_tuples = []
+    if len(label_tuples)>1:
+        psql.batch_insert_fast(command,label_tuples)
     return label_to_owners
 
 def owners_to_NFT(wallets):
     #returns a list of (slug,contract)
     NFT_list = []
-    for wall in tqdm(wallets):
+    for wall in wallets:
         url = f"https://eth-mainnet.g.alchemy.com/nft/v3/-dkhE3R5RIFr9b9KUhpp4pqlQFzpPFzW/getNFTsForOwner?owner={wall}&withMetadata=true&pageSize=100"
         headers = {"accept": "application/json"}
         response = requests.get(url, headers=headers)
@@ -160,6 +175,34 @@ def NFT_to_rarities(nfts):
         failure_count=0
         with_rarity.append((contract,token_id,rarity))
     return with_rarity
+
+def URL_api_request(contract,token_id):
+        url = f"https://eth-mainnet.g.alchemy.com/nft/v3/-dkhE3R5RIFr9b9KUhpp4pqlQFzpPFzW/getNFTsForContract?contractAddress={contract}&withMetadata=true&startToken={token_id}"
+        headers = {"accept": "application/json"}
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        return data
+    
+def NFT_to_URLs(nfts):
+    # Configure logging to write to a file
+    logging.basicConfig(filename='error_log_alchemy.txt', level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
+    with_url = []
+    for slug,contract in tqdm(nfts):
+        data = URL_api_request(contract,0)
+        try:
+            total_supply = int(data["nfts"][0]["contract"]["totalSupply"])
+        except:
+            continue
+        total_supply = max(total_supply,10000)
+        for x in range(0,total_supply,100):
+            data = URL_api_request(contract,x)
+            for token in data["nfts"]:
+                with_url.append((slug,contract,token["tokenId"],token["image"]["originalUrl"]))
+        # except Exception as e:
+        #     logging.error(f"An error occurred: {str(e)} while processing {contract}. Returned response {response}")
+        #     continue
+    return with_url
+
 
 
 def person_detector(address):

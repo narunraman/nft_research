@@ -89,117 +89,57 @@ def parse_active_listing_data(listing_dict):
     
 def parse_sale_data(sale_dict):
     event_type = sale_dict['event_type']
-    auction_type = sale_dict['auction_type']
-    if event_type=="successful":
-        is_bundle = False
-        slug = sale_dict['collection_slug']
-        if sale_dict['asset'] != None:
-            token_id = sale_dict['asset']['token_id']
-        elif sale_dict['asset_bundle'] != None:
-            token_id = [asset['token_id'] for asset in sale_dict['asset_bundle']['assets']]
-            is_bundle = True
+    if event_type=="sale":
+        if sale_dict['nft'] != None:
+            slug = sale_dict['nft']['collection']
+            token_id = sale_dict['nft']['identifier']
         else:
             token_id=None
+            slug =None
+        seller_address = sale_dict.get('seller',None)
+        buyer_address = sale_dict.get('buyer',None)
+        timestamp = sale_dict.get('event_timestamp',None)
+        transaction_hash = sale_dict.get('transaction',None)
         try:
-            seller_address = sale_dict['seller']['address']
-        except:
-            seller_address = None
-        try:
-            buyer_address = sale_dict['winner_account']['address']
-        except:
-            buyer_address = None
-        try:
-            seller_username = sale_dict['seller']['user']['username']
-        except:
-            seller_username = None    
-        try:
-            buyer_username = sale_dict['winner_account']['user']['username']
-        except:
-            buyer_username = None
-        try:
-            timestamp = sale_dict['transaction']['timestamp']
-        except:
-            timestamp = None
-        try:
-            total_price = float(sale_dict['total_price'])*10**-18
+            total_price = float(sale_dict['payment']['quantity'])*10**-18
         except:
             total_price = None
-        try: 
-            bid_amount = float(sale_dict['total_price'])*10**-18
-        except:
-            bid_amount = None
         try:
-            payment_token = sale_dict['payment_token']['symbol']
-            usd_price = float(sale_dict['payment_token']['usd_price'])
+            payment_token = sale_dict['payment']['symbol']
         except:
             payment_token = None
-            usd_price = None
-        try:
-            transaction_hash = sale_dict['transaction']['transaction_hash']
-        except:
-            transaction_hash = None
-        
-
-
-        result = {'is_bundle': is_bundle,
+            
+        result = {
                   'slug':slug,
                   'token_id': token_id,
                   'seller_address': seller_address,
                   'buyer_address': buyer_address,
-                  'buyer_username': buyer_username,
-                  'seller_username':seller_username,
                   'timestamp': timestamp,
                   'total_price': total_price, 
                   'payment_token': payment_token,
-                  'usd_price': usd_price,
-                  '_id': transaction_hash,
-                 'event_type': event_type,
-                 'auction_type': auction_type}
-    elif event_type=='transfer':
-        is_bundle = False
-        slug = sale_dict['collection_slug']
-        if sale_dict['asset'] != None:
-            token_id = sale_dict['asset']['token_id']
-        elif sale_dict['asset_bundle'] != None:
-            token_id = [asset['token_id'] for asset in sale_dict['asset_bundle']['assets']]
-            is_bundle = True
+                  'id': transaction_hash}
+        
+    elif event_type=="transfer":
+        if sale_dict['nft'] != None:
+            slug = sale_dict['nft']['collection']
+            token_id = sale_dict['nft']['identifier']
         else:
             token_id=None
-        try:
-            timestamp = sale_dict['transaction']['timestamp']
-        except:
-            timestamp = None
-        try:
-            transaction_hash = sale_dict['transaction']['transaction_hash']
-        except:
-            transaction_hash = None
-        try:
-            seller_address = sale_dict['transaction']['from_account']['address']
-        except:
-            seller_address = None
-        try:
-            buyer_address = sale_dict['transaction']['to_account']['address']
-        except:
-            buyer_address = None
-        try:
-            seller_username = sale_dict['transaction']['from_account']['user']['username']
-        except:
-            seller_username = None    
-        try:
-            buyer_username = sale_dict['transaction']['to_account']['user']['username']
-        except:
-            buyer_username = None
-        result = {'is_bundle': is_bundle,
+            slug =None
+        seller_address = sale_dict.get('from_address',None)
+        buyer_address = sale_dict.get('to_address',None)
+        timestamp = sale_dict.get('event_timestamp',None)
+        transaction_hash = sale_dict.get('transaction',None)
+
+        result = {
                   'slug':slug,
                   'token_id': token_id,
                   'seller_address': seller_address,
                   'buyer_address': buyer_address,
-                  'buyer_username': buyer_username,
-                  'seller_username':seller_username,
                   'timestamp': timestamp,
-                  '_id': transaction_hash,
-                 'event_type': event_type,
-                 'auction_type': auction_type}
+                  'total_price': None, 
+                  'payment_token': None,
+                  'id': transaction_hash}
             
     return result
 

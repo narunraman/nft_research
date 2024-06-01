@@ -1,6 +1,7 @@
 #!/usr/bin/python
 from configparser import ConfigParser
 import psycopg2
+import psycopg2.extras
 
 def config(filename='/global/scratch/tlundy/NFT_Research/nft_research/database.ini', section='postgresql'):
     # create a parser
@@ -50,8 +51,9 @@ def connect():
             conn.close()
             print('Database connection closed.')
 
-def execute_commands(commands,data_list=None):
+def execute_commands(commands,data_list=None,no_return=False):
     conn = None
+    rows= []
     try:
         # read the connection parameters
         params = config()
@@ -65,8 +67,9 @@ def execute_commands(commands,data_list=None):
         else:
             for command,data in zip(commands,data_list):
                 cur.execute(command,data)
+        if not no_return:
+            rows = cur.fetchall()
         # close communication with the PostgreSQL database server
-        rows = cur.fetchall()
         cur.close()
         # commit the changes
         conn.commit()
@@ -77,6 +80,46 @@ def execute_commands(commands,data_list=None):
         if conn is not None:
             conn.close()
 
+def batch_insert(command,data_list):
+    conn = None
+    try:
+        # read the connection parameters
+        params = config()
+        # connect to the PostgreSQL server
+        conn = psycopg2.connect(**params)
+        cur = conn.cursor()
+        # create table one by one
+        cur.executemany(command, data_list)
+        # close communication with the PostgreSQL database server
+        cur.close()
+        # commit the changes
+        conn.commit()
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+    finally:
+        if conn is not None:
+            conn.close()
+
+def batch_insert_fast(command,data_list):
+    conn = None
+    try:
+        # read the connection parameters
+        params = config()
+        # connect to the PostgreSQL server
+        conn = psycopg2.connect(**params)
+        cur = conn.cursor()
+        # create table one by one
+        psycopg2.extras.execute_values(cur, command, data_list,page_size=5000)
+        # close communication with the PostgreSQL database server
+        cur.close()
+        # commit the changes
+        conn.commit()
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+    finally:
+        if conn is not None:
+            conn.close()
+            
 def get_psql_type(field, collection_name):
     if field == None:
         return "text"
@@ -129,6 +172,36 @@ def create_empty_psql_tables_from_mongo(mongo_dict):
 
     execute_commands(commands)
     
+def create_table(table_name, fields):
+    """ create tables in the PostgreSQL database"""
+    field_statements = [f"{field_name} {data_type}" for field_name, data_type in fields.items()]
+    fields_sql = ", ".join(field_statements)
+    create_table_command = f"CREATE TABLE IF NOT EXISTS {table_name} (id SERIAL PRIMARY KEY, {fields_sql});"
+
+    # execute_commands(create_table_command)
+    try:
+        params = config()
+        conn = psycopg2.connect(**params)
+        cursor = conn.cursor()
+
+        # Execute the SQL command
+        cursor.execute(create_table_command)
+        
+        # Commit the changes to the database
+        conn.commit()
+        
+        # Close the cursor and connection
+        cursor.close()
+        conn.close()
+        
+        print(f"Table {table_name} created successfully.")
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"Error while creating PostgreSQL table {table_name}", error)
+    finally:
+        # Ensure the connection is closed
+        if conn is not None:
+            conn.close()
+
 
 def fill_psql_from_csv(filename):
     try:
