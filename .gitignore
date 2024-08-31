@@ -19,3 +19,5 @@ database.ini
 **/*.out
 Dino/placebo_output*/*
 Dino/val_comp/*
+Dino/synth_out.pkl
+Dino/synth_df_cache.pkl
