@@ -6,3 +6,16 @@ paper_plots/*
 Dino/images_features/*
 Dino/.github/*
 Dino/logs/*
+*/.ipynb_checkpoints/*
+**/.ipynb_checkpoints/
+Dino/logs/
+Dino/.github/
+**/__pycache__/
+**/*.png
+**/*.jpg
+bandwagon/
+database.ini
+**/*.err
+**/*.out
+Dino/placebo_output*/*
+Dino/val_comp/*

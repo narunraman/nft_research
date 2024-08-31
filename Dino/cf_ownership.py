@@ -6,7 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-def generate_all_ownerhip_stats(db_name='objective_cf_num',cutoff=5):
+def generate_all_ownership_stats(db_name='objective_cf_num',cutoff=5):
     percentiles_total,percentiles_tokens = plot_all_overlap_cdfs(db_name,cutoff)
     #Adds number of counterfeits to the list of results
     with_nums_total = sorted([(x[0],x[1],cfu.get_counterfeit_db(slug=x[0],db_name='objective_cf_num')[0][0]) for x in percentiles_total])
@@ -132,7 +132,8 @@ def find_all_owner_direction(db_name='objective_cf_num',dead_slugs = ['golbintow
             continue
         counts.append(find_owner_direction(slug,owner_dates))
     return counts
-    
+
+#returns a triplet of the slug, number of owners who owned a look-alike first and total num owners    
 def find_owner_direction(slug,owner_dates):
     overlap = cfu.get_overlaps(slug).drop_duplicates(subset=['slug','address'])
     merged_overlaps = pd.merge(owner_dates,overlap,on=['address','slug'])

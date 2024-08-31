@@ -1,0 +1,84 @@
+# Use the FiveThirtyEight color scheme
+axes.prop_cycle: cycler('color', ['30a2da', 'fc4f30', 'e5ae38', '6d904f', '8b8b8b'])
+
+# Background color
+figure.facecolor: white
+axes.facecolor: white
+
+# Grid lines
+axes.grid: True
+grid.linestyle: -
+grid.linewidth: 1.0
+# grid.color: #cbcbcb
+
+# Spines
+axes.spines.left: True
+axes.spines.bottom: True
+axes.spines.top: False
+axes.spines.right: False
+
+### Axes
+axes.titlesize : large
+axes.labelsize : 30
+axes.labelweight: bold
+axes.formatter.use_mathtext : True
+
+### Lines
+lines.linewidth : 4.5
+lines.markersize : 10
+hatch.linewidth: 0.25
+
+patch.antialiased   : True
+
+### Ticks
+xtick.top: False
+xtick.bottom: True
+xtick.major.size: 5.0
+xtick.minor.size: 2.0
+xtick.major.width: 0.5
+xtick.minor.width: 0.5
+xtick.direction: in
+xtick.minor.visible: True
+xtick.major.top: False
+xtick.major.bottom: True
+xtick.minor.top: False
+xtick.minor.bottom: True
+xtick.major.pad: 5.0
+xtick.minor.pad: 5.0
+ytick.labelsize: 15
+
+ytick.left: True
+ytick.right: False
+ytick.major.size: 5.0
+ytick.minor.size: 2.0
+ytick.major.width: 0.5
+ytick.minor.width: 0.5
+ytick.direction: in
+ytick.minor.visible: True
+ytick.major.left: True
+ytick.major.right: False
+ytick.minor.left: True
+ytick.minor.right: False
+ytick.major.pad: 5.0
+ytick.minor.pad: 5.0
+xtick.labelsize: 15
+
+### Legend
+legend.frameon: False
+legend.fontsize: 15
+
+### Figure size
+figure.figsize: 5.0, 3.0
+figure.subplot.left: 0.125
+figure.subplot.bottom: 0.175
+figure.subplot.top: 0.95
+figure.subplot.right: 0.95
+figure.autolayout : False
+
+### Fonts
+# text.usetex: True
+# font.family: serif
+# font.serif: Computer Modern
+
+### Saving figures
+path.simplify : True
