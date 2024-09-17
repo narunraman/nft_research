@@ -1,11 +1,11 @@
 
 from queue import Empty
-from parsing_helpers import parse_sale_data, parse_nft_list, parse_listing_data
+from data_retrieval.parsing_helpers import parse_sale_data, parse_nft_list, parse_listing_data
 import time
 from datetime import datetime
 from tqdm import tqdm
-import request_helpers as req
-from psql_methods import execute_commands,batch_insert
+import data_retrieval.request_helpers as req
+from data_retrieval.psql_methods import execute_commands,batch_insert
 
 API_KEYS = ("c113e12504b14e0185b714dcd72d6110", "55544646a70c491c80991e0666e7dbf6","507741952944434a9234438b7707b358")
 SKIP_LIST=['ens','base-introduced','fundrop-pass','gemesis','apecoin','dai-stablecoin','uniswap','1inch-token','rarible','emblem-vault','sewerpass','clonex-mintvial','sorare']

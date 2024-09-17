@@ -1,9 +1,12 @@
 import counterfeit_utils as cfu
 import pandas as pd
-import opensea_methods as opse
+import sys
+sys.path.append("..")
+import data_retrieval.opensea_methods as opse
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+import tqdm as tqdm
 
 
 def generate_all_ownership_stats(db_name='objective_cf_num',cutoff=5):
@@ -118,7 +121,7 @@ def make_owner_latex(df):
 
 #----------------METHODS FOR OWNERSHIP DIRECTION --------------------------
 
-def find_all_owner_direction(db_name='objective_cf_num',dead_slugs = ['golbintownwtf','invisiblefriends'],cutoff=5):
+def find_all_owner_direction(db_name='objective_cf_num',dead_slugs = ['goblintownwtf','invisiblefriends'],cutoff=5):
     cf_nums = cfu.get_counterfeit_db(slug=None,db_name=db_name)
     columns = ['slug','cf_num']
     df = pd.DataFrame(cf_nums,columns=columns)
@@ -126,6 +129,16 @@ def find_all_owner_direction(db_name='objective_cf_num',dead_slugs = ['golbintow
     slugs = merged_df['slug'].unique()
     owner_dates = cfu.get_all_ownershipdates()
     owner_dates.rename(columns={'wallet': 'address'}, inplace=True)
+    date_map = {}
+    for slug in slugs:
+        try:
+            date_map[slug] = cfu.creation_sec_from_db(slug)
+        except:
+            print(slug)
+    #merge with the ownership dates
+    owner_dates['creation_date'] = owner_dates['slug'].map(date_map)
+    owner_dates['creation_date'] = owner_dates['creation_date'].fillna(owner_dates['creation_date'].max())
+    owner_dates['creation_date'] = owner_dates['creation_date'].astype(int)
     counts = []
     for slug in slugs:
         if slug in dead_slugs:
@@ -134,7 +147,8 @@ def find_all_owner_direction(db_name='objective_cf_num',dead_slugs = ['golbintow
     return counts
 
 #returns a triplet of the slug, number of owners who owned a look-alike first and total num owners    
-def find_owner_direction(slug,owner_dates):
+def find_owner_direction(slug,owner_dates,creation_date=True):
+    owner_dates = owner_dates.drop_duplicates(subset=['slug','address'])
     overlap = cfu.get_overlaps(slug).drop_duplicates(subset=['slug','address'])
     merged_overlaps = pd.merge(owner_dates,overlap,on=['address','slug'])
     der_list = cfu.der_list_from_db(slug)
@@ -143,7 +157,20 @@ def find_owner_direction(slug,owner_dates):
     complete_df = complete_df.query(f'slug not in {der_list}')
     complete_df['timestamp'] = complete_df['timestamp'].astype(int)
     complete_df['timestamp_orig'] = complete_df['timestamp_orig'].astype(int)
+    complete_df = complete_df.query('creation_date > creation_date_orig')
     filtered_df = complete_df[complete_df['timestamp'] < complete_df['timestamp_orig']]
     print(slug,len(filtered_df),len(complete_df))
     # display(complete_df)
+    #TEMPORARY RETURN STATEMENT TO BE REMOVED
+    # return complete_df
     return (slug,len(filtered_df),len(complete_df))
+
+
+def store_all_ownership_dates(destination='ownership_dates_2'):
+    top_slugs = cfu.get_top_slugs(cut_off=5,db_name="objective_cf_num")
+    print(top_slugs)
+    for slug in top_slugs:
+        try:
+            cfu.store_ownership_dates(slug,destination=destination)
+        except:
+            pass

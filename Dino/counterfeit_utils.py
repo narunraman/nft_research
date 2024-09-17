@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 import sys
 sys.path.append("..")
-import opensea_methods as opse
+import data_retrieval.opensea_methods as opse
 import matplotlib.pyplot as plt
-import psql_methods as psql
+import data_retrieval.psql_methods as psql
 import plotly.express as px
 import seaborn as sns
 from datetime import datetime
@@ -30,6 +30,10 @@ plt.style.use('narunraman.mplstyle')
 
 # plt.rcParams['font.family'] = 'sans-serif'
 # plt.rcParams['font.sans-serif'] = prop.get_name()
+#CONSTANTS
+DB_NAME = 'objective_cf_num'
+CUT_OFF = 5
+
 def get_dists():
     return pw_dists
     
@@ -189,11 +193,13 @@ def find_earliest_ownership_date(wallet,slug):
                     timestamp=event[4]
     return timestamp
 
-def store_ownership_dates(top_slug):
-    command = "Insert into ownership_dates (wallet, slug, timestamp) values (%s, %s, %s)"
-    drop_dead = get_overlaps(top_slug).query("address!='0x000000000000000000000000000000000000dEaD' and sorted_order<=10")
+def store_ownership_dates(top_slug,db_name='objective_cf_num',destination='ownership_dates'):
+    command = f"Select num from {db_name} where slug='{top_slug}'"
+    data = psql.execute_commands([command])
+    num_cf =data[0][0]
+    command = "Insert into {destination} (wallet, slug, timestamp) values (%s, %s, %s)"
+    drop_dead = get_overlaps(top_slug).query("address!='0x000000000000000000000000000000000000dEaD' and sorted_order<={num_cf}")
     peeps_to_check = drop_dead[['slug', 'address']].drop_duplicates()
-    peeps_to_check
     og_wallets = drop_dead[['address']].drop_duplicates()['address'].to_list()
     dates = []
     for address in tqdm(og_wallets):
@@ -213,11 +219,7 @@ def get_all_ownershipdates():
     df = pd.DataFrame(data,columns=columns)
     return df
     
-def get_top_slugs(cut_off,db_name):
-    command = f"Select slug from {db_name} where num>={cut_off} and type='pfps'"
-    data = psql.execute_commands([command])
-    slugs = [x[0] for x in data]
-    return slugs
+
 
 def compute_interval(interval_days,start,df,symetric=False):
     # Filter the DataFrame for the specified date and interval
@@ -253,14 +255,15 @@ def find_cf_days(top_slug,db_name,remove_ders = True):
     return intervals
     
 def compute_all_intervals(top_slug,interval,db_name,remove_ders = True):
-    command = f"Select num from {db_name} where slug='{top_slug}'"
-    data = psql.execute_commands([command])
-    num_cf =data[0][0]
-    df = get_overlaps(top_slug).query(f"address!='0x000000000000000000000000000000000000dEaD' and sorted_order<={num_cf}")
-    if remove_ders:
-        der_list = der_list_from_db(top_slug)
-        df = df.query(f"slug not in {der_list}")
-    slugs = df[['slug']].drop_duplicates()['slug'].to_list()
+    # command = f"Select num from {db_name} where slug='{top_slug}'"
+    # data = psql.execute_commands([command])
+    # num_cf =data[0][0]
+    # df = get_overlaps(top_slug).query(f"address!='0x000000000000000000000000000000000000dEaD' and sorted_order<={num_cf}")
+    # if remove_ders:
+    #     der_list = der_list_from_db(top_slug)
+    #     df = df.query(f"slug not in {der_list}")
+    #Remove code above after testing
+    slugs = get_look_sims(top_slug,remove_ders=remove_ders)
     sale_df = day_sales_from_db(top_slug)
     intervals = []
     for slug in slugs:
@@ -402,3 +405,31 @@ def build_sample_dist(sampled_intervals):
         mean_data1 = np.mean(data1)
         mean_samples.append(mean_data1)
     return mean_samples
+
+"""
+-------------- Code for retreiving top slugs and their look sims ----------------
+"""
+def get_top_slugs(cut_off,db_name):
+    command = f"Select slug from {db_name} where num>={cut_off} and type='pfps'"
+    data = psql.execute_commands([command])
+    slugs = [x[0] for x in data]
+    return slugs
+
+def get_all_look_sims():
+    top_slugs = get_top_slugs(CUT_OFF,DB_NAME)
+    unique_look_sims = set()
+    for slug in top_slugs:
+        look_sims = get_look_sims(slug)
+        unique_look_sims.update(look_sims)
+    return unique_look_sims
+
+def get_look_sims(top_slug,remove_ders=True):
+    command = f"Select num from {DB_NAME} where slug='{top_slug}'"
+    data = psql.execute_commands([command])
+    num_cf =data[0][0]
+    df = get_overlaps(top_slug).query(f"address!='0x000000000000000000000000000000000000dEaD' and sorted_order<={num_cf}")
+    if remove_ders:
+        der_list = der_list_from_db(top_slug)
+        df = df.query(f"slug not in {der_list}")
+    slugs = df[['slug']].drop_duplicates()['slug'].to_list()
+    return slugs

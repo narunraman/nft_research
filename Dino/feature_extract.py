@@ -14,7 +14,7 @@
 import os
 import sys
 import argparse
-
+sys.path.append('..')
 import torch
 from torch import nn
 import torch.distributed as dist
@@ -23,8 +23,8 @@ from torchvision import datasets
 from torchvision import transforms as pth_transforms
 from torchvision import models as torchvision_models
 import logging
-import utils
-import vision_transformer as vits
+import Dino.utils as utils
+import Dino.vision_transformer as vits
 
 def get_labels(data_path):
     dataset_val = ReturnIndexDataset(os.path.join(data_path, "val"))

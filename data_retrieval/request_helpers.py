@@ -5,7 +5,9 @@ API_KEYS = ("c113e12504b14e0185b714dcd72d6110", "55544646a70c491c80991e0666e7dbf
 def response_handler(url,querystring=None,headers=None):
     no_response = True
     while(no_response):
-        params =  urllib.parse.urlencode(querystring, quote_via=urllib.parse.quote)
+        params = None
+        if querystring:
+            params =  urllib.parse.urlencode(querystring, quote_via=urllib.parse.quote)
         response = requests.request("GET", url, headers=headers, params=params)
         if response.status_code == 429:
             print('error')

@@ -2,16 +2,16 @@
 from queue import Empty
 import requests
 from pymongo import MongoClient
-from parsing_helpers import parse_sale_data, parse_nft_list, parse_listing_data
+from data_retrieval.parsing_helpers import parse_sale_data, parse_nft_list, parse_listing_data
 import time
 import json
 import networkx as nx
 from collections import defaultdict
 import datetime
 from tqdm import tqdm
-from opensea_methods import *
+from data_retrieval.opensea_methods import *
 import logging
-import psql_methods as psql
+import data_retrieval.psql_methods as psql
 
 API_KEYS = ("-dkhE3R5RIFr9b9KUhpp4pqlQFzpPFzW")
 

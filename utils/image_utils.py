@@ -7,12 +7,12 @@ import pandas as pd
 import logging
 import random
 
-def pull_image_from_url(slug,nft_data,base_dir='expanded_images',log_dir='logs'):  
+def pull_image_from_url(slug,nft_data,base_dir='snob_case_study',log_dir='logs'):  
     # URL of the image you want to download 
 
-    logging.basicConfig(filename=f'{log_dir}/{slug}.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.basicConfig(filename=f'/global/scratch/tlundy/NFT_Research/nft_research/Dino/{log_dir}/{slug}.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     # Specify the directory path you want to create
-    directory_path = f"{base_dir}/val/{slug}/"
+    directory_path = f"/global/scratch/tlundy/NFT_Research/nft_research/Dino/images_features/{base_dir}/val/{slug}/"
     
     # Check if the directory exists, if not, create it
     if not os.path.exists(directory_path):
@@ -34,7 +34,7 @@ def pull_image_from_url(slug,nft_data,base_dir='expanded_images',log_dir='logs')
                 resized_image = image.resize(new_size, Image.LANCZOS)
                 # display(image)
                 # Save the image as a JPEG file
-                file_path = f"{base_dir}/val/{slug}/{token_id}.jpg"
+                file_path = f"/global/scratch/tlundy/NFT_Research/nft_research/Dino/images_features/{base_dir}/val/{slug}/{token_id}.jpg"
                 resized_image.save(file_path, "JPEG")
             elif response.status_code== 504: 
                 logging.info(f"Failed to download the image. Status code: {response.status_code}")
