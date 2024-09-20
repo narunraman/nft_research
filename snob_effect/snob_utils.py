@@ -47,13 +47,16 @@ def create_snob_df(img_path,feat_path,case_study=False):
 
 def add_sales(df,case_study=False):
     if case_study:
+        valid_tuple = tuple(df['Collection'].unique().tolist())
         command = f"SELECT slug,token_id,sale_price from cf_sales where slug in {valid_tuple}"
         temp_stats_tuples = psql.execute_commands([command])
         columns = ['slug','token_id', 'sale_price']
         sales_df = pd.DataFrame(temp_stats_tuples,columns=columns)
-        avg_sales = sales_df.groupby(['slug','token_id']).mean().reset_index()
-        avg_sales.sort_values(by=['slug','token_id'],ascending=False,inplace=True)
-        merged_df = pd.merge(df, avg_sales, left_on=['slug','token_id'],right_on=['Collection','NFT_num'])
+        avg_sales = sales_df.groupby(['slug','token_id']).median().reset_index()
+        #print the types of the columns
+        print(avg_sales.dtypes)
+        avg_sales['token_id'] = avg_sales['token_id'].astype(str)
+        merged_df = pd.merge(df, avg_sales, right_on=['slug','token_id'],left_on=['Collection','NFT_num'])
     else:
         command = "Select * from nfttosales_2"
         sales = psql.execute_commands([command])

@@ -9,20 +9,21 @@ import logging
 from scipy import stats
 
 #For all slugs for which we dont already have time-series data this retrieves it using Openseas API 
-def retreive_full_time_series(slugs):
+def retreive_full_time_series(slugs,table_name='cf_sales',log_file='full_time_series.log'):
     #set up logging
-    logging.basicConfig(filename='full_time_series.log', level=logging.INFO)
-    command = "select distinct slug from cf_sales"
+    logging.basicConfig(filename=log_file, level=logging.INFO)
+    command = f"select distinct slug from {table_name}"
     rows = psql.execute_commands([command])
     done_slugs = [row[0] for row in rows]
     slugs_left = [x for x in slugs if x not in done_slugs]
     logging.info(f"Slugs left: {len(slugs_left)}")
     sales = []
-    command = "Insert into cf_sales (slug,token_id,seller,buyer,timestamp,sale_price,payment_token,transaction) Values (%s,%s,%s,%s,%s,%s,%s,%s)"
+    command = f"Insert into {table_name} (slug,token_id,seller,buyer,timestamp,sale_price,payment_token,transaction) Values (%s,%s,%s,%s,%s,%s,%s,%s)"
     for slug in slugs_left:
         try:
             sales = opse.pull_sales_data(collection_slug=slug)
             psql.batch_insert(command,sales)
+            logging.info(f"Completed {slug}")
         except:
             logging.info(f"Failed to pull sales data for {slug}")
             continue
