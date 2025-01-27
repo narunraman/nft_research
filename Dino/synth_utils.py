@@ -70,6 +70,7 @@ def filter_synth_df(slug,df):
 def query_day(slug,day,df,offset=0):
     df = df.query(f"{day-60}<day_id<{day+15+offset}")
     df = df.query(f"day_id<={day} or day_id>{day+offset}")
+    df = df.query("slug!='dope-shibas'")
     unique_slugs = df['slug'].unique()
     if offset>0:
         df['day_id'] = df['day_id'].apply(lambda x: x-offset if x > day else x) 
@@ -81,7 +82,7 @@ def query_day(slug,day,df,offset=0):
     filt_df = df.query(f"slug in {tuple(unique_slugs)}")
     if df.empty:
         return None
-    sc = Synth(filt_df, "price", "slug", "day_id", day, slug, n_optim=10)
+    sc = Synth(filt_df, "price", "slug", "day_id", day, slug, n_optim=10,)
     return sc
 
 def diff_query_day(slug,day,df):

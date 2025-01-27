@@ -107,7 +107,7 @@ def pull_sales_data(collection_slug,API_KEY = API_KEYS[0],before=None,after=None
             #Parsing sales data
             parsed_sales = [tuple(parse_sale_data(sale).values()) for sale in batch_sales]
             #storing parsed data into MongoDB
-            if parsed_sales[0][4]>max_time:
+            if parsed_sales[0][4]>=max_time:
                 return total_sales
             else:
                 max_time=parsed_sales[0][4]

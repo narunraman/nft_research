@@ -104,37 +104,44 @@ def plot_price_chart(slug):
     min_date = min(date_price, key=lambda x: x[0])[0]
     date_price_zero = [(x[0]-min_date,x[1]) for x in date_price]
     x,y = zip(*date_price_zero)
-    plt.scatter(x,y)
+    plt.plot(x,y)
     plt.show()
 
-def plot_price_chart_smooth(slug,ko_list = [], filename='',pretty_slug=None):
+def plot_price_chart_smooth(slug,ko_list = [],date_list=[], filename='',pretty_slug=None):
     if not pretty_slug:
         pretty_slug = slug
     date_price = sales_from_db(slug)
     date_price = sorted(date_price)
     min_date = min(date_price, key=lambda x: x[0])[0]
-    date_price_zero = [(x[0]-min_date,x[1]) for x in date_price]
+    date_price_zero = [(x[0]-min_date,x[1]) for x in date_price if x[1] is not None]
     x,y = zip(*date_price_zero)
     x = [j/86400 for j in x]
     window_size = 15
     y_values_smoothed = np.convolve(y, np.ones(window_size)/window_size, mode='valid')
     y_values_smoothed = medfilt(y, kernel_size=window_size)
 
-    plt.figure(figsize=(8, 6))
-    ax = plt.gca()  # Get current axes to customize
-
+    # plt.figure(figsize=(8, 6))
+    # ax = plt.gca()  # Get current axes to customize
+    # if slug == 'goblintownwtf':
+    #     slug = 'Goblin Town'
     plt.plot(x[:len(y_values_smoothed):15], y_values_smoothed[::15], linewidth=1.8)
     cmap = get_cmap('viridis')
     colors = cmap(np.linspace(0, 1, len(ko_list)))
     colors = get_cmap('Set1', len(ko_list))
+    if date_list:
+        ax2 = ax.twinx()
+        secs = [(date-min_date)/86400 for date in date_list]
+        ax2.hist(secs, bins=100, alpha=0.3, color='blue', label='Number of Sales')
     for ko,color in zip(ko_list,colors.colors):
         sec = (creation_sec_from_db(ko)-min_date)/86400
         plt.axvline(x=sec,color='r', linestyle='--',linewidth=1.5,label=ko)
-    plt.xlabel(f"Days Since {pretty_slug} Mint", fontsize=20)
-    plt.ylabel(f"{pretty_slug} Price in ETH", fontsize=20)
+    # plt.xlabel(f"Days Since {pretty_slug} Mint", fontsize=20)
+    # plt.ylabel(f"{pretty_slug} Price in ETH", fontsize=20, fontweight='normal')
     plt.xticks(fontsize=20)
-    plt.yticks(fontsize=20)
-    # plt.ylim(bottom=0,top=18)
+    plt.yticks(np.arange(0, 9, 2), fontsize=20)
+    # plt.yticks([0, 2, 4, 6, 8])
+    plt.ylim(bottom=0,top=10)
+    # plt.grid(False)
     # plt.xlim(left=1,right=800)
     # plt.xlim(left=150,right=250)
     # plt.savefig(f'../paper_plots/{filename}.png', facecolor='white', edgecolor='none')
@@ -255,9 +262,9 @@ def find_cf_days(top_slug,db_name,remove_ders = True):
     return intervals
     
 def compute_all_intervals(top_slug,interval,db_name,remove_ders = True):
-    # command = f"Select num from {db_name} where slug='{top_slug}'"
-    # data = psql.execute_commands([command])
-    # num_cf =data[0][0]
+    command = f"Select num from {db_name} where slug='{top_slug}'"
+    data = psql.execute_commands([command])
+    num_cf =data[0][0]
     # df = get_overlaps(top_slug).query(f"address!='0x000000000000000000000000000000000000dEaD' and sorted_order<={num_cf}")
     # if remove_ders:
     #     der_list = der_list_from_db(top_slug)
@@ -303,9 +310,9 @@ def day_sales_from_db(slug):
 
 def sales_from_db(slug=None):
     if slug:
-        command = f"select timestamp,sale_price from cf_sales where slug='{slug}'"
+        command = f"select timestamp,sale_price from cf_sales where slug='{slug}' and (payment_token='WETH' or payment_token='ETH')"
     else:
-        command = f"select timestamp,sale_price,slug from cf_sales"
+        command = f"select timestamp,sale_price,slug from cf_sales where (payment_token='WETH' or payment_token='ETH')"
     data = psql.execute_commands([command])
     return data
 

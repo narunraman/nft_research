@@ -7,6 +7,8 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import tqdm as tqdm
+import data_retrieval.psql_methods as psql
+import pickle
 
 
 def generate_all_ownership_stats(db_name='objective_cf_num',cutoff=5):
@@ -174,3 +176,202 @@ def store_all_ownership_dates(destination='ownership_dates_2'):
             cfu.store_ownership_dates(slug,destination=destination)
         except:
             pass
+
+def get_ownership_sales(top_slug,valid_tuple):
+    command = f"SELECT slug,token_id,buyer,timestamp,transaction,sale_price from look_sim_sales where slug in {valid_tuple} and (payment_token='WETH' or payment_token='ETH')"
+    temp_stats_tuples = psql.execute_commands([command])
+    columns = ['slug','token_id', 'buyer','timestamp','transaction','sale_price']
+    sales_df = pd.DataFrame(temp_stats_tuples,columns=columns)
+    sales_df = sales_df.drop_duplicates(subset='transaction')
+    sales_df.drop(columns=['transaction'], inplace=True)
+    #seperate query for top_slug
+    command = f"SELECT slug,token_id,buyer,timestamp,transaction,sale_price from cf_sales where slug='{top_slug}' and (payment_token='WETH' or payment_token='ETH')"
+    temp_stats_tuples = psql.execute_commands([command])
+    top_sales_df = pd.DataFrame(temp_stats_tuples,columns=columns)
+    top_sales_df = top_sales_df.drop_duplicates(subset='transaction')
+    top_sales_df.drop(columns=['transaction'], inplace=True)
+    sales_df = pd.concat([sales_df,top_sales_df])
+    return sales_df
+
+def get_ownership_sales_for_wallets(wallets):
+    command = f"SELECT slug,token_id,buyer,timestamp,transaction,sale_price from look_sim_sales where  (payment_token='WETH' or payment_token='ETH')"
+    temp_stats_tuples = psql.execute_commands([command])
+    columns = ['slug','token_id', 'buyer','timestamp','transaction','sale_price']
+    sales_df = pd.DataFrame(temp_stats_tuples,columns=columns)
+    del temp_stats_tuples
+    sales_df = sales_df.drop_duplicates(subset='transaction')
+    sales_df.drop(columns=['transaction'], inplace=True)
+    #seperate query for top_slug
+    command = f"SELECT slug,token_id,buyer,timestamp,transaction,sale_price from cf_sales where (payment_token='WETH' or payment_token='ETH')"
+    temp_stats_tuples = psql.execute_commands([command])
+    top_sales_df = pd.DataFrame(temp_stats_tuples,columns=columns)
+    del temp_stats_tuples
+    top_sales_df = top_sales_df.drop_duplicates(subset='transaction')
+    top_sales_df.drop(columns=['transaction'], inplace=True)
+    sales_df = pd.concat([sales_df,top_sales_df])
+    sales_df = sales_df[sales_df['buyer'].isin(wallets)]
+    return sales_df
+
+def get_ownership_dates(slug,sales_df):
+    #Step 1: For each token id in the sales_df flitered to slug in question, find the earliest date it was sold
+    top_df = sales_df.query(f"slug=='{slug}'")
+    top_df['timestamp'] = top_df['timestamp'].astype(int)
+    top_df = top_df.sort_values('timestamp')
+    top_df = top_df.drop_duplicates(subset=['buyer'])
+    top_owners = top_df['buyer'].unique()
+    #Step 2: For every other slug in the sales find the earliest date it was sold to the top owners
+    all_dates = []
+    all_slugs = sales_df['slug'].unique()
+    sales_df['timestamp'] = sales_df['timestamp'].astype(int)
+    for other_slug in all_slugs:
+        if other_slug == slug:
+            continue
+        other_df = sales_df.query(f"slug=='{other_slug}'")
+        other_owners = other_df['buyer'].unique()
+        for owner in top_owners:
+            if owner in other_owners:
+                earliest_date = other_df.query(f"buyer=='{owner}'")['timestamp'].min()
+                earliest_sale_price = other_df.query(f"buyer=='{owner}' and timestamp=={earliest_date}")['sale_price'].values[0]
+                all_dates.append((other_slug,owner,earliest_date,earliest_sale_price))
+    #Step 3 make df
+    columns = ['slug','buyer','timestamp','sale_price']
+    df = pd.DataFrame(all_dates,columns=columns)
+    #Step 4 merge with top_df
+    merged_df = pd.merge(df,top_df,on=['buyer'],suffixes=['_orig',''])
+    return merged_df
+
+def make_ownership_direction_df():
+    top_slugs = cfu.get_top_slugs(cut_off=5,db_name="objective_cf_num")
+    rows = []
+    for slug in top_slugs:
+        date_df = make_one_date_df(slug)
+        for name,group in date_df.groupby('slug_orig'):
+            rows.append([slug,name,len(group),len(group.query('timestamp_orig<timestamp')),len(group.query('timestamp_orig>timestamp'))])
+    columns = ['slug','look_sim','num_owners','ll_first','reference_first']
+    df = pd.DataFrame(rows,columns=columns)
+    return df
+
+def make_one_date_df(slug):
+    look_sims = cfu.get_look_sims(slug,remove_ders=True)
+    sales_df = get_ownership_sales(slug,tuple(look_sims))
+    date_df = get_ownership_dates(slug,sales_df)
+    date_df['look_sim'] = date_df['slug_orig']
+    date_df = add_creation_dates(date_df)
+    date_df = date_df.query('slug_creation_date<look_sim_creation_date')
+    return date_df
+
+def make_ownership_sale_price_df():
+    top_slugs = cfu.get_top_slugs(cut_off=5,db_name="objective_cf_num")
+    rows = []
+    sale_ratios_ll = []
+    sale_ratios_ref = []
+    for slug in top_slugs:
+        look_sims = cfu.get_look_sims(slug,remove_ders=True)
+        sales_df = get_ownership_sales(slug,tuple(look_sims))
+        date_df = get_ownership_dates(slug,sales_df)
+        date_df['look_sim'] = date_df['slug_orig']
+        date_df = add_creation_dates(date_df)
+        date_df = date_df.query('slug_creation_date<look_sim_creation_date')
+        date_df_filt_ll = date_df.query('timestamp_orig<timestamp')
+        date_df_filt_ref = date_df.query('timestamp_orig>timestamp')
+        sale_ratios_ll.append((slug,date_df_filt_ll['sale_price'],date_df_filt_ll['sale_price_orig']))
+        sale_ratios_ref.append((slug,date_df_filt_ref['sale_price'],date_df_filt_ref['sale_price_orig']))
+    df_ll = pd.DataFrame(sale_ratios_ll,columns=['slug','sale_price_ref','sale_price_ll']).reset_index(drop=True)
+    df_ll['sale_price_ref'] = df_ll['sale_price_ref'].apply(lambda x: list(x))
+    df_ll['sale_price_ll'] = df_ll['sale_price_ll'].apply(lambda x: list(x))
+    df_ll = df_ll.reset_index()
+    df_ll = df_ll.apply(pd.Series.explode)
+    df_ref = pd.DataFrame(sale_ratios_ref,columns=['slug','sale_price_ref','sale_price_ll']).reset_index(drop=True)
+    df_ref['sale_price_ref'] = df_ref['sale_price_ref'].apply(lambda x: list(x))
+    df_ref['sale_price_ll'] = df_ref['sale_price_ll'].apply(lambda x: list(x))
+    df_ref = df_ref.reset_index()
+    df_ref = df_ref.apply(pd.Series.explode)
+    return df_ll,df_ref
+
+def add_creation_dates(df):
+    slugs = list(df['slug'].unique())+list(df['look_sim'].unique())
+    date_map = {}
+    for slug in slugs:
+        try:
+            date_map[slug] = cfu.creation_sec_from_db(slug)
+        except:
+            print(slug)
+    df['slug_creation_date'] = df['slug'].map(date_map)
+    df['slug_creation_date'] = df['slug_creation_date'].fillna(df['slug_creation_date'].max())
+    df['slug_creation_date'] = df['slug_creation_date'].astype(int)
+    df['look_sim_creation_date'] = df['look_sim'].map(date_map)
+    df['look_sim_creation_date'] = df['look_sim_creation_date'].fillna(df['look_sim_creation_date'].max())
+    df['look_sim_creation_date'] = df['look_sim_creation_date'].astype(int)
+    return df
+
+def get_wallet_sales_distro(slug,direction='ll_first',norm=True):
+    date_df = make_one_date_df(slug)
+    date_df = add_creation_dates(date_df)
+    date_df = date_df.query('slug_creation_date<look_sim_creation_date')
+    if direction == 'll_first':
+        date_df = date_df.query('timestamp_orig<timestamp')
+        wallets = date_df['buyer'].unique()
+    elif direction == 'ref_only':
+        date_df = date_df.query('timestamp_orig<timestamp')
+        ll_wallets = date_df['buyer'].unique()
+        ref_sales = get_ownership_sales(slug,('',))
+        ref_sales = ref_sales.sort_values('timestamp')
+        date_df = ref_sales.drop_duplicates(subset=['buyer'])
+        print(ref_sales['buyer'].nunique())
+        wallets = set(ref_sales['buyer'].unique())-set(ll_wallets)
+        print(len(wallets))
+    else:
+        date_df = date_df.query('timestamp_orig>timestamp')
+    
+    sales_df = get_ownership_sales_for_wallets(tuple(wallets))
+    #group by wallet and filter sales after timestamp and normalize by sale_price
+    wallet_sales = []
+    for wallet in wallets:
+        wallet_df = sales_df.query(f"buyer=='{wallet}'")
+        last_timestamp = date_df.query(f"buyer=='{wallet}'")['timestamp_orig'].min()
+        wallet_df = wallet_df.query(f"timestamp<{last_timestamp}")
+        ref_sale = date_df.query(f"buyer=='{wallet}'")['sale_price'].values[0]
+        if norm:
+            wallet_sales.append(wallet_df['sale_price']/ref_sale)
+        else:
+            wallet_sales.append(wallet,wallet_df['sale_price'])
+    return wallet_sales
+
+def save_all_wallet_sales(slugs):
+    for slug in slugs:
+        wallet_sales_1 = get_wallet_sales_distro(slug,'ll_first')
+        sales_tuple = (slug,wallet_sales_1)
+        with open(f'ownership_out/{slug}_wallet_sales.pkl','wb') as f:
+            pickle.dump(sales_tuple,f)
+
+def num_lls_to_purchase_prob(slug):
+    df_ll_first = make_one_date_df(slug)
+    df_ll_first = df_ll_first.query('timestamp_orig<timestamp')
+    ll_group = df_ll_first.groupby('buyer').agg({'slug':'count'})
+    #turn  buyer group into df with one column buyer and one column num_pruchases
+    ll_group = ll_group.reset_index()
+    ll_group.columns = ['buyer','num_purchases']
+    look_sims = cfu.get_look_sims(slug,remove_ders=True)
+    sales_df = get_ownership_sales(slug,tuple(look_sims))
+    sales_df = sales_df.sort_values('timestamp')
+    sales_df_no_ref = sales_df.query('slug!=@slug')
+    sales_df_ref = sales_df.query('slug==@slug')
+    sales_df_no_ref = sales_df_no_ref.drop_duplicates(subset=['slug','buyer'],keep='first')
+    #group by buyer and count how many unique slugs they have bought
+    buyer_group = sales_df_no_ref.groupby('buyer').agg({'slug':'count'})
+    #turn  buyer group into df with one column buyer and one column num_pruchases
+    buyer_group = buyer_group.reset_index()
+    buyer_group.columns = ['buyer','num_purchases']
+    #Filter out buyers who appear in sales_df_ref
+    buyer_group = buyer_group[~buyer_group['buyer'].isin(sales_df_ref['buyer'])]
+    # Step 1: Count the occurrences of each num_purchases value in both DataFrames
+    count_df1 = ll_group['num_purchases'].value_counts().sort_index()
+    count_df2 = buyer_group['num_purchases'].value_counts().sort_index()
+
+    # Step 2: Combine the counts into a single DataFrame
+    counts_combined = pd.DataFrame({'df1': count_df1, 'df2': count_df2}).fillna(0)
+
+    # Step 3: Calculate the ratio for each num_purchases value
+    counts_combined['total'] = counts_combined['df1'] + counts_combined['df2']
+    counts_combined['ratio'] = counts_combined['df1'] / counts_combined['total']
+    return counts_combined
