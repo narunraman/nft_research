@@ -14,12 +14,8 @@ from more_itertools import chunked
 from datetime import datetime
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr, spearmanr
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from matplotlib import font_manager
+import matplotlib as mpl, font_manager
 from matplotlib.ticker import MaxNLocator
-import matplotlib.pyplot as plt
-from scipy.stats import pearsonr, spearmanr
 from scipy import stats
 from sklearn.metrics import r2_score
 from sklearn import datasets, linear_model
@@ -142,9 +138,10 @@ def add_rarity_ranks_to_df(df):
 #Creates total dataframe with both expanded and original images and adds rarity ranks
 def create_master_snob_df():
     try:
-        df = pd.pd.read_pickle('/global/scratch/tlundy/NFT_Research/nft_research/snob_effect/dataframes/total_df.pkl')
+        df = pd.read_pickle('/global/scratch/tlundy/NFT_Research/nft_research/snob_effect/dataframes/total_df.pkl')
         return df
     except:
+        print('could not load total df')
         df1 = create_snob_df('expanded_images','expanded_features')
         df2 = create_snob_df('images','features')
         total_df =pd.concat([df1, df2], ignore_index=True)
@@ -157,6 +154,10 @@ def create_master_snob_df():
         df_rare = pd.DataFrame(rarities, columns=columns)
         merged_df_rare = pd.merge(df_rare, total_df, on=['Contract','NFT_num'],how='right')
         return merged_df_rare
+
+def load_master_df():
+    df = pd.read_pickle('/global/scratch/tlundy/NFT_Research/nft_research/snob_effect/dataframes/total_df.pkl')
+    return df
 
 def add_average_feat(df_filtered):
     grouped = df_filtered.groupby('Label')

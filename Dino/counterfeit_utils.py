@@ -3,6 +3,7 @@ import numpy as np
 import sys
 sys.path.append("..")
 import data_retrieval.opensea_methods as opse
+import os
 import matplotlib.pyplot as plt
 import data_retrieval.psql_methods as psql
 import plotly.express as px
@@ -17,12 +18,12 @@ from sklearn.neighbors import KernelDensity
 # plt.style.use('fivethirtyeight')
 # plt.matplotlib.rcParams['figure.dpi'] = 300
 # plt.matplotlib.rcParams['font.size'] = 6
-pw_dists = pd.read_pickle('pw_dists_counterfeit.pkl')
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
 mpl.rcParams.update(mpl.rcParamsDefault)
-plt.style.use('narunraman.mplstyle')
+# plt.style.use('narunraman.mplstyle')
 
 # font_path = 'cmunss.ttf'  # Your font path goes here
 # font_manager.fontManager.addfont(font_path)
@@ -33,8 +34,11 @@ plt.style.use('narunraman.mplstyle')
 #CONSTANTS
 DB_NAME = 'objective_cf_num'
 CUT_OFF = 5
-
+# pw_dists = pd.read_pickle('pw_dists_counterfeit.pkl')
 def get_dists():
+    #get local file path
+    path = os.path.abspath(os.path.dirname(__file__))
+    pw_dists = pd.read_pickle(f'{path}/pw_dists_counterfeit.pkl')
     return pw_dists
     
 def get_overlaps(top_slug):
@@ -45,6 +49,7 @@ def get_overlaps(top_slug):
     data = psql.execute_commands([command])
     columns = ['slug','address','token_id']
     df = pd.DataFrame(data,columns=columns)
+    pw_dists = get_dists()
     pw_dists_no_dupe = pw_dists.query('Top_100!=Alt')
     top_df = pw_dists_no_dupe.query(f"Top_100=='{top_slug}'")
     sorted_df = top_df.sort_values(by='Euc_Distance').reset_index(drop=True)
@@ -181,9 +186,20 @@ def volume_from_db(slug):
     try:
         volume = data[0][0]
     except:
+        print("No volume data for slug")
         volume=0
     return volume
-    
+
+def look_sim_volume_from_db(look_sim):
+    command = f"SELECT sum(sale_price) from look_sim_sales where slug = {look_sim} and (payment_token='WETH' or payment_token='ETH')"
+    data = psql.execute_commands([command])
+    try:
+        volume = data[0][0]
+    except:
+        print("No volume data for slug")
+        volume=0
+    return volume
+
 def find_earliest_ownership_date(wallet,slug):
     command = f"select token_id from slug_to_token where address='{wallet}' and slug='{slug}'"
     data = psql.execute_commands([command])

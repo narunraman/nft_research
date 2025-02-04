@@ -1,5 +1,7 @@
-import counterfeit_utils as cfu
-import cf_value as cfv
+import sys
+sys.path.append("..")
+import Dino.counterfeit_utils as cfu
+import Dino.cf_value as cfv
 import pandas as pd
 from SyntheticControlMethods import Synth,DiffSynth
 from matplotlib import pyplot as plt
@@ -39,6 +41,8 @@ def build_synth_df(seed=1234,normalize=True,cutoff=5,all_slugs=True,save=False):
     return (result,first_day)
 
 def days_since_first(date,first_day):
+    if isinstance(first_day, int):
+        first_day = pd.to_datetime(first_day, unit='D', origin='2018-01-01')
     delta = date - first_day
     return delta.days
 
@@ -67,7 +71,8 @@ def filter_synth_df(slug,df):
 #     reindexed_df = group.set_index('day_id').reindex(new_index).reset_index().rename(columns={'index': 'day_id'})
 #     return reindexed_df
 
-def query_day(slug,day,df,offset=0):
+def query_day(slug,day,df,pre_start=3,offset=0):
+    day = day-pre_start
     df = df.query(f"{day-60}<day_id<{day+15+offset}")
     df = df.query(f"day_id<={day} or day_id>{day+offset}")
     df = df.query("slug!='dope-shibas'")
@@ -82,7 +87,7 @@ def query_day(slug,day,df,offset=0):
     filt_df = df.query(f"slug in {tuple(unique_slugs)}")
     if df.empty:
         return None
-    sc = Synth(filt_df, "price", "slug", "day_id", day, slug, n_optim=10,)
+    sc = Synth(filt_df, "price", "slug", "day_id", day, slug, n_optim=5)
     return sc
 
 def diff_query_day(slug,day,df):
@@ -102,6 +107,40 @@ def get_ko_day(alt,first_day):
     day = days_since_first(pd.to_datetime(date),first_day)
     ko_days = (alt,day,first_day)
     return ko_days
+
+#Find all Look sims for slug, sort by volume and return non-overlapping KOs
+#Need to pickle the result 
+def create_average_synth_job_df(slug):
+    #Get all looksims
+    look_sims = cfu.get_look_sims(slug,remove_ders=True)
+    alt_tuples = []
+    for alt in look_sims:
+        alt_tuples.append((alt,cfu.volume_from_db(alt),get_ko_day(alt,0)[1]))
+
+    alt_df = pd.DataFrame(alt_tuples,columns=['slug','volume','ko_day'])
+    df_sorted = alt_df.sort_values(by="volume", ascending=False).reset_index(drop=True)
+
+    selected_rows = []
+    while not df_sorted.empty:
+        # -- Pick the top row (highest volume)
+        chosen_row = df_sorted.iloc[0]
+        
+        # -- Keep that row in our final result
+        selected_rows.append(chosen_row)
+        chosen_ko = chosen_row["ko_day"]
+        mask_no_overlap = (
+            (df_sorted["ko_day"] < chosen_ko - 15)
+            | (df_sorted["ko_day"] > chosen_ko + 15)
+        )
+        
+        # -- Keep only rows that do NOT overlap:
+        df_sorted = df_sorted[mask_no_overlap].reset_index(drop=True)
+
+    # Turn the selected rows into a DataFrame
+    result_df = pd.DataFrame(selected_rows).query("volume>0")
+    slug_and_alts = [(slug,alt) for alt in result_df['slug']]
+    slug_and_alts_df = pd.DataFrame(slug_and_alts,columns=['Top_100','Alt'])
+    return slug_and_alts_df
 
 
     

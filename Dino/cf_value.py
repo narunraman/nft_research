@@ -3,7 +3,7 @@ sys.path.append("..")
 import data_retrieval.opensea_methods as opse
 import data_retrieval.psql_methods as psql
 import pandas as pd
-import counterfeit_utils as cfu
+import Dino.counterfeit_utils as cfu
 import pickle
 import logging
 from scipy import stats
