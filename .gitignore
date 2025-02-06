@@ -17,7 +17,12 @@ bandwagon/
 database.ini
 **/*.err
 **/*.out
+**/*.pkl
 Dino/placebo_output*/*
 Dino/val_comp/*
 Dino/synth_out.pkl
 Dino/synth_df_cache.pkl
+**/*.sh
+**/*.pdf
+**/*.log
+**/*.tex
