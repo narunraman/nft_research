@@ -112,9 +112,9 @@ def get_all_placebo_results(job_file,out_file,offset=False):
             # Combine them into a list of tuples
             slug,alt = list(zip(column1_data, column2_data))[slug_id]
             if offset:
-                outpath = f'placebo_output_{out_file}_offset/result_df' + str(slug_id) + '.pkl'
+                outpath = f'synth_outs/placebo_output_{out_file}_offset/result_df' + str(slug_id) + '.pkl'
             else:
-                outpath = f'placebo_output_{out_file}/result_df' + str(slug_id) + '.pkl'
+                outpath = f'synth_outs/placebo_output_{out_file}/result_df' + str(slug_id) + '.pkl'
 
             df = pd.read_pickle(outpath).sort_values(by='post/pre',ascending=False)
             row = show_placebo_results(slug,alt,df,slug_id,job_file)
