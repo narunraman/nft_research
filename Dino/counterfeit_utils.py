@@ -154,11 +154,14 @@ def plot_price_chart_smooth(slug,ko_list = [],date_list=[], filename='',pretty_s
     # plt.legend()
     # plt.show()
 
-def timestamps_to_dates(date_prices):
-    if len(date_prices[0])==3:
-        day_prices = [(datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d'), data,slug) for timestamp, data,slug in date_prices]
+def timestamps_to_dates(date_prices,raw_timestamps=False):
+    if raw_timestamps:
+        day_prices = [datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d') for timestamp in date_prices]
     else:
-        day_prices = [(datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d'), data) for timestamp, data in date_prices]
+        if len(date_prices[0])==3:
+            day_prices = [(datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d'), data,slug) for timestamp, data,slug in date_prices]
+        else:
+            day_prices = [(datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d'), data) for timestamp, data in date_prices]
     return day_prices
     
 
