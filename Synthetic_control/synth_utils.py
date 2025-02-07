@@ -110,13 +110,13 @@ def get_ko_day(alt,first_day):
 
 #Find all Look sims for slug, sort by volume and return non-overlapping KOs
 #Need to pickle the result 
-def create_average_synth_job_df(slug,overlap=15):
+def create_average_synth_job_df(slug,overlap=15,return_dates=False):
     #Get all looksims
     look_sims = cfu.get_look_sims(slug,remove_ders=True)
     alt_tuples = []
     for alt in look_sims:
         alt_tuples.append((alt,cfu.volume_from_db(alt),get_ko_day(alt,0)[1]))
-
+    
     alt_df = pd.DataFrame(alt_tuples,columns=['slug','volume','ko_day'])
     df_sorted = alt_df.sort_values(by="volume", ascending=False).reset_index(drop=True)
 
@@ -140,6 +140,8 @@ def create_average_synth_job_df(slug,overlap=15):
     result_df = pd.DataFrame(selected_rows).query("volume>0")
     slug_and_alts = [(slug,alt) for alt in result_df['slug']]
     slug_and_alts_df = pd.DataFrame(slug_and_alts,columns=['Top_100','Alt'])
+    if return_dates:
+        slug_and_alts_df['alt_date'] = slug_and_alts_df['Alt'].apply(lambda x: cfu.creation_date_from_db(x))
     return slug_and_alts_df
 
 
