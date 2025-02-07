@@ -110,7 +110,7 @@ def get_ko_day(alt,first_day):
 
 #Find all Look sims for slug, sort by volume and return non-overlapping KOs
 #Need to pickle the result 
-def create_average_synth_job_df(slug):
+def create_average_synth_job_df(slug,overlap=15):
     #Get all looksims
     look_sims = cfu.get_look_sims(slug,remove_ders=True)
     alt_tuples = []
@@ -129,8 +129,8 @@ def create_average_synth_job_df(slug):
         selected_rows.append(chosen_row)
         chosen_ko = chosen_row["ko_day"]
         mask_no_overlap = (
-            (df_sorted["ko_day"] < chosen_ko - 15)
-            | (df_sorted["ko_day"] > chosen_ko + 15)
+            (df_sorted["ko_day"] < chosen_ko - overlap)
+            | (df_sorted["ko_day"] > chosen_ko + overlap)
         )
         
         # -- Keep only rows that do NOT overlap:
