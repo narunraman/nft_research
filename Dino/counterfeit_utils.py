@@ -41,14 +41,30 @@ def get_dists():
     pw_dists = pd.read_pickle(f'{path}/pw_dists_counterfeit.pkl')
     return pw_dists
     
-def get_overlaps(top_slug):
-    command  = f"Select distinct address from slug_to_token where slug='{top_slug}'"
+def get_slug_owners(slug):
+    command  = f"Select distinct address from slug_to_token where slug='{slug}'"
     data = psql.execute_commands([command])
     addresses = tuple([x[0] for x in data])
     command = f"Select * from slug_to_token where address in {addresses}"
     data = psql.execute_commands([command])
     columns = ['slug','address','token_id']
     df = pd.DataFrame(data,columns=columns)
+    return df
+
+def get_all_owners(slugs = None):
+    if slugs:
+        slugs = tuple(slugs)
+        command = f"Select * from slug_to_token where slug in {slugs}"
+    else:
+        command = f"Select * from slug_to_token"
+    data = psql.execute_commands([command])
+    columns = ['slug','address','token_id']
+    df = pd.DataFrame(data,columns=columns)
+    del data
+    return df
+
+def get_overlaps(top_slug):
+    df = get_slug_owners(top_slug)
     pw_dists = get_dists()
     pw_dists_no_dupe = pw_dists.query('Top_100!=Alt')
     top_df = pw_dists_no_dupe.query(f"Top_100=='{top_slug}'")

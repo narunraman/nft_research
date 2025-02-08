@@ -57,7 +57,7 @@ def compute_overlap_cdf(slug,der_list = None,xlim=200,ylim=0.02,show=True,filter
     return make_overlap_cdf(slug,list_of_tuples,der_list = der_list,xlim=xlim,ylim=ylim,show=False)
 
 #Takes in a slug and its overlap df to produce a plot of the cdf of overlaps
-def make_overlap_cdf(slug,count_to_overlap,der_list = None,xlim=2000,ylim=0.3,show=True):
+def make_overlap_cdf(slug,count_to_overlap,der_list = None,xlim=2000,ylim=0.3,show=True,plot=False):
     #assumes overlap is sorted
     # count_to_overlap = sorted(count_to_overlap)
     count_to_overlap = [x for x in count_to_overlap if x[2] not in opse.SKIP_LIST]
@@ -73,31 +73,32 @@ def make_overlap_cdf(slug,count_to_overlap,der_list = None,xlim=2000,ylim=0.3,sh
     
     # Create a CDF plot using Seaborn
     # plt.figure(figsize=(10, 6))
-    sns.ecdfplot(data=individual_values)
-    for line in plt.gca().get_lines():  # gca = get current axis
-        line.set_linewidth(1.5)
-    x = list(np.arange(0,1,0.01))
-    y = list(np.arange(0,values[-1],values[-1]/100))
-    # Add labels and title
-    try:
-        plt.plot(y,x, linewidth=5, color='k')
-    except:
-        print('error')
-    plt.xlabel('Ranked Visual Distance from Collection', fontsize=20)
-    plt.ylabel('Cumaltive Percent of Total NFTs', fontsize=20)
-    plt.xlim(left=0,right=xlim)
-    plt.ylim(bottom=0,top=ylim)
-    # plt.title(f'Cumulative Distribution of NFTs owned by Top Collection owners')
-    # plt.legend()
-    # Show the plot
-    if show:
-        plt.show()
+    if plot:
+        sns.ecdfplot(data=individual_values)
+        for line in plt.gca().get_lines():  # gca = get current axis
+            line.set_linewidth(1.5)
+        x = list(np.arange(0,1,0.01))
+        y = list(np.arange(0,values[-1],values[-1]/100))
+        # Add labels and title
+        try:
+            plt.plot(y,x, linewidth=5, color='k')
+        except:
+            print('error')
+        plt.xlabel('Ranked Visual Distance from Collection', fontsize=20)
+        plt.ylabel('Cumaltive Percent of Total NFTs', fontsize=20)
+        plt.xlim(left=0,right=xlim)
+        plt.ylim(bottom=0,top=ylim)
+        # plt.title(f'Cumulative Distribution of NFTs owned by Top Collection owners')
+        # plt.legend()
+        # Show the plot
+        if show:
+            plt.show()
     percentiles = [0.001,0.002,0.01,0.1,.25, .5, .75]
     print(series.describe(percentiles=percentiles))
     return series
 
 def make_overlap_scatter(slug, der_list=None):
-    overlap_df = count_overlaps(slug)
+    overlap_df = cfu.count_overlaps(slug)
     count_to_overlap = sorted([tuple(x) for x in overlap_df.to_records(index=False)], key=lambda x: x[1])
     count_to_overlap = [x for x in count_to_overlap if x[0] not in opse.SKIP_LIST]
     if der_list:
