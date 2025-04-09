@@ -10,6 +10,7 @@ import tqdm as tqdm
 import data_retrieval.psql_methods as psql
 import pickle
 
+DATASET_SIZE = 10976
 
 def generate_all_ownership_stats(db_name='objective_cf_num',cutoff=5):
     percentiles_total,percentiles_tokens = plot_all_overlap_cdfs(db_name,cutoff)
@@ -376,3 +377,21 @@ def num_lls_to_purchase_prob(slug):
     counts_combined['total'] = counts_combined['df1'] + counts_combined['df2']
     counts_combined['ratio'] = counts_combined['df1'] / counts_combined['total']
     return counts_combined
+
+#-----------------Methods for Non-DB ownership analysis (Beefalo)-------------------
+
+def get_ownership_stats_no_db(df,top_slug,der_list,look_sims):
+    df = df.query("address!='0x000000000000000000000000000000000000dEaD' and slug not in @opse.SKIP_LIST")
+    df_slugged = df.query('slug == @top_slug')
+    df_slugged_address = df_slugged['address'].unique()
+    ll_ders = [x[1] for x in der_list if x[0] == top_slug]
+    df_look_sim = df.query('address in @df_slugged_address and (slug in @look_sims[@top_slug]) and slug not in @ll_ders and slug != @top_slug')
+    df_total = df.query('address in @df_slugged_address and slug not in @ll_ders and slug != @top_slug')
+    perc_ll = len(df_look_sim)/len(df_total)
+    df_look_sim_no_dupe = df_look_sim.drop_duplicates(subset=['slug','address'])
+    df_total_no_dupe = df_total.drop_duplicates(subset=['slug','address'])
+    perc_ll_no_dupe = len(df_look_sim_no_dupe)/len(df_total_no_dupe)
+    exp_perc_ll = len(look_sims[top_slug])/DATASET_SIZE
+    ratio_ll = perc_ll/exp_perc_ll
+    ratio_ll_no_dupe = perc_ll_no_dupe/exp_perc_ll
+    return perc_ll,perc_ll_no_dupe,exp_perc_ll,ratio_ll,ratio_ll_no_dupe
