@@ -132,10 +132,10 @@ def day_sales_from_db(slug):
 def calculate_percentile(row):
     return stats.percentileofscore(row['mean_samples'], row['mean_data'])
 
-def show_cf_val_results():
+def show_cf_val_results(folder='val_comp'):
     result_df = pd.DataFrame()
     for res_id in range(1,270):
-        outpath = f'val_comp/result_df' + str(res_id) + '.pkl'
+        outpath = f'{folder}/result_df' + str(res_id) + '.pkl'
         try:
             df = pd.read_pickle(outpath)
             result_df = pd.concat([result_df,df])
@@ -143,5 +143,7 @@ def show_cf_val_results():
             print(res_id)
             continue
     #iterate through rows of result df
+    if folder!= 'val_comp':
+        return result_df
     result_df['percentile'] = result_df.apply(calculate_percentile, axis=1)
     return result_df

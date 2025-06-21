@@ -1,9 +1,6 @@
-
-import torch
 from itertools import combinations
 import networkx as nx
 from tqdm import tqdm
-import numpy
 import multiprocessing
 import numpy as np
 
@@ -53,6 +50,7 @@ def bin_value(value,quantiles):
     # Bin the values based on quantiles
     bin = np.digitize(value, quantiles, right=True)
     return bin
+
 def make_bipartite_graph(label_to_owners,label_to_stats,label_map,bin=True,num_bins=10):
     if bin:
         stats = label_to_stats.values()
@@ -70,8 +68,6 @@ def make_bipartite_graph(label_to_owners,label_to_stats,label_map,bin=True,num_b
             G.add_node(label,y=int(bin_value(stats[0],quantiles)),x=[float(stats[1])],collection=True,label=label_map[label])
         else:
             G.add_node(label,y=float(stats[0]),x=[float(stats[1])],collection=True,label=label_map[label])
-        # except:
-        #     continue
         for wall in label_to_owners[label]:
             G.add_node(wall,y=0,x=[0],collection=False,label=0)
             G.add_edge(label,wall)

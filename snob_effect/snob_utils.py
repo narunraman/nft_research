@@ -14,7 +14,7 @@ from more_itertools import chunked
 from datetime import datetime
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr, spearmanr
-import matplotlib as mpl, font_manager
+import matplotlib as mpl
 from matplotlib.ticker import MaxNLocator
 from scipy import stats
 from sklearn.metrics import r2_score
@@ -22,6 +22,11 @@ from sklearn import datasets, linear_model
 
 mpl.rcParams.update(mpl.rcParamsDefault)
 plt.style.use('../Dino/narunraman.mplstyle')
+import argparse
+import logging
+from pathlib import Path
+
+import pandas as pd
 
 def save_data_and_features(img_path,feat_path,feat):
     df = assemble_data_and_features(img_path,feat_path,feat)
@@ -86,6 +91,12 @@ def create_snob_df(img_path,feat_path,case_study=False,normalize=False,feat=True
     return merged_df_no_feat
 
 def add_sales(df,case_study=False,normalize=False):
+    """
+    Grabs transaction data from the database and merges it with the features dataframe
+    NOTE: The case study data is from a seperate database because we pulled the transacation data
+    for our second paper on look similar NFTs. It would have been functionally equivalent to run snob_builder.py
+    on the case study images so that the transaction data ended up in the same place
+    but we already had the data elsewhere."""
     if case_study:
         valid_tuple = tuple(df['Collection'].unique().tolist())
         if normalize:
@@ -195,6 +206,9 @@ def compute_global_corrs(total_df,norm_type='additive',slug_list = None):
         
     
 def compute_all_corrs(total_df):
+    """
+    Creates Table 1 of the paper
+    """
     #deep copy total_df
     total_df = total_df.copy()
     command = "select distinct slug from slug_to_type where type='pfps'"
@@ -206,7 +220,7 @@ def compute_all_corrs(total_df):
     total_df = total_df.groupby('Collection').filter(lambda group: len(group) >= 100)
     #Keep only rows with rarity ranks
     rares = total_df.dropna(subset=['rarity_rank'],inplace=False).groupby('Collection').filter(lambda group: len(group) >= 100)
-    #Keep only rows without raarity ranks
+    #Keep only rows without rarity ranks
     no_rares = total_df[total_df['rarity_rank'].isna()].groupby('Collection').filter(lambda group: len(group) >= 100)
     param_list = [(rares,'rarity_rank',None),(rares,'rarity_rank',pfp_rows),(rares,'rarity_rank',non_pfp_rows),(total_df,'distance',None),(rares,'distance',None),(no_rares,'distance',None),(total_df,'distance',pfp_rows),(total_df,'distance',non_pfp_rows)]
     result_list = []
@@ -218,12 +232,17 @@ def compute_all_corrs(total_df):
     result_df = pd.DataFrame(result_list,columns=['column','metric','Correlations','Pos Correlations','Neg Correlations','Total'])
     return result_df
 
-def compute_labels_pearson(grouped,column,metric='pearson',label_filt=None,slug_list = False):
+def compute_labels_pearson(grouped,column,metric='pearson',label_filt=None,slug_list_bool = False):
+    """
+    Computes pearson coefficients and p-values for each colleciton in grouped
+    Technically can compute spearman as well but not used
+    Overloaded to return slugs of collections with positive correlations for downstream analysis"""
     pos_count = 0
     neg_count = 0
     total_count = 0
     correlations = []
     slug_list = []
+    # Filter the DataFrame to include only the specified labels (not used in main analysis)
     if label_filt is not None:
         rows = set(label_filt)
     else:
@@ -243,11 +262,16 @@ def compute_labels_pearson(grouped,column,metric='pearson',label_filt=None,slug_
             elif p_value<0.05 and correlation<0:
                 neg_count+=1
                 slug_list.append(label)
-    if slug_list:
+    if slug_list_bool:
         return slug_list
     return column,metric,correlations,pos_count,neg_count,total_count
 
 def compare_r2(total_df,return_slugs=False):
+    """
+    Takes collections which have rarity ranks
+    Fits a simple lienar model between sale price and distance/rarity
+    and compares the r2 scores
+    Function is overloaded to return the slugs of collections where distance is better, useful for downstream analysis"""
     total_df = total_df.copy()
     total_df = total_df.groupby('Collection').filter(lambda group: len(group) >= 100)
     #Keep only rows with rarity ranks
@@ -290,6 +314,10 @@ def compare_r2(total_df,return_slugs=False):
         return (count_rare,count_dist,np.mean(rare_r2s),np.mean(dist_r2s))
 
 def compare_spearman(total_df):
+    """
+    Takes collections which have rarity ranks
+    and for which distance had a better r2
+    computes whether the spearman correlation between rarity and sale price is better than distance and sale price"""
     total_df = total_df.copy()
     total_df = total_df.groupby('Collection').filter(lambda group: len(group) >= 100)
     df_filtered_rare = total_df.dropna(subset=['rarity_rank'],inplace=False).groupby('Collection').filter(lambda group: len(group) >= 100)
@@ -459,6 +487,10 @@ def compute_rarity_and_distance_bins(df, slug, num_quants, y_axis = 'sale_price'
 
 
 def plot_one_distance_and_rarity(df,slug,num_quants=20,y_axis='sale_price',metric='mean'):
+    """
+    Plot the average sale price in rarity and distance bins for a given slug.
+    """
+    # Computes the metric of sale price (i.e. mean, variance, max-min) in rarity and distance bins
     average_sale_price_in_rare_bins, average_sale_price_in_dist_bins = compute_rarity_and_distance_bins(df, slug, num_quants, y_axis, metric)
     if y_axis == 'sale_price':
         y_label = 'Average Sale Price'
@@ -469,6 +501,7 @@ def plot_one_distance_and_rarity(df,slug,num_quants=20,y_axis='sale_price',metri
     average_sale_price_in_rare_bins.plot(kind='line',label='Rarity')
     average_sale_price_in_dist_bins.plot(kind='line',label='Distance')
     plt.legend(fontsize=18, facecolor='white', edgecolor='none', frameon=True,framealpha=1)
+    #Pretty names
     slug_name_map = {
         'boredapeyachtclub':'Bored Ape Yacht Club',
         'cool-cats-nft':'Cool Cats',
@@ -484,11 +517,6 @@ def plot_one_distance_and_rarity(df,slug,num_quants=20,y_axis='sale_price',metri
     # not bold font
     plt.xlabel('Bin Number', fontsize=20, fontweight='normal')
     plt.ylabel(y_label, fontsize=15, fontweight='normal')
-    # plt.xticks(rotation=45)
-    # plt.xticks(range(1, num_quants + 1))
-    # plt.xlim(1, num_quants)  # Adjust x-axis limits to ensure 0 is at the y-axis
-    # plt.ylim(ymin=0)
-    # plt.show()
     plt.xticks(range(num_quants), range(1, num_quants + 1))  # Set custom labels for x-ticks
     plt.xlim(0, num_quants)  # Adjust x-axis limits to ensure 0 is at the y-axis
     plt.ylim(ymin=0)
@@ -554,6 +582,12 @@ def plot_all_slugs(df, num_quants, y_axis, metric):
 
 def make_case_study_result_df(df):
     rows = []
+    """Ugly but simple code that iterates through case study collections
+    and computes the correlations between rarity, distance and sale price
+    and rarity, distance and count.
+    Both pearson and spearman correlations are computed.
+    Analysis is repeated on 10% most rare and 10% most distant
+    """
     for name,group in df.groupby('Collection'):
         result = {}
         distance = group['distance']
@@ -623,4 +657,137 @@ def make_case_study_result_df(df):
         rows.append(result)
     result_df = pd.DataFrame(rows)
     return result_df
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+def parse_args():
+    p = argparse.ArgumentParser(description="Run full SNOB correlation pipeline")
+    p.add_argument("--img_path",  required=True, help="Directory holding case‑study images")
+    p.add_argument("--feat_path", required=True, help="Directory holding case‑study features")
+    p.add_argument("--out_dir",   default="snob_outputs", help="Where to write CSVs / plots")
+    p.add_argument("--no_plots",  action="store_true", help="Skip distance‑vs‑rarity plots")
+    return p.parse_args()
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def save_df(df, out_dir, name):
+    fp = Path(out_dir) / f"{name}.csv"
+    df.to_csv(fp, index=False)
+    logging.info("Saved %s", fp)
+
+
+def main():
+    args = parse_args()
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s — %(levelname)s — %(message)s")
+
+    # ------------------------------------------------------------------ #
+    # 1. Master‑level correlations                                       #
+    # ------------------------------------------------------------------ #
+    logging.info("Creating master snob DataFrame")
+    master_df = create_master_snob_df()
+    #Filter out collections with fewer than 100 sales entries
+    master_df = master_df.groupby("Collection").filter(lambda g: len(g) >= 100)
+
+    logging.info("Isolating rows with valid rarity ranks")
+    rares = (
+        master_df.dropna(subset=["rarity_rank"])
+        .groupby("Collection")
+        .filter(lambda g: len(g) >= 100)
+    )
+    #List of slugs that had correlations
+    slug_list = compute_labels_pearson(
+        rares.groupby("Collection"),
+        "rarity_rank",
+        metric="pearson",
+        slug_list=True,
+    )
+    #Computes global correlations for section 5.3
+    #It does this for all collections and also focused on slugs in slug_list
+    #We report the all collection number in the paper
+    norm_results = []
+    for mode in ["additive", "multiplicative", "none"]:          # three norms
+        for use_slug in [True, False]:                            # with / without slug list
+            logging.info("Computing %s‑norm (slug_filter=%s)", mode, use_slug)
+            corr, p_val = compute_global_corrs(
+                master_df,
+                norm_type=mode,
+                slug_list=(slug_list if use_slug else None),
+            )
+            norm_results.append(
+                {
+                    "norm_type": mode,
+                    "slug_filter": use_slug,
+                    "pearson_r": corr,
+                    "p_value": p_val,
+                }
+            )
+
+    global_corrs_df = pd.DataFrame(norm_results)
+    save_df(global_corrs_df, out_dir, "global_corrs")
+    save_df(pd.DataFrame([global_corrs_df], columns=["pearson_r", "p_value"]),
+            out_dir, "global_corrs")
+
+    logging.info("Computing full correlation summary (all_corrs)")
+    #Table 1
+    all_corrs_df = compute_all_corrs(master_df)
+    save_df(all_corrs_df, out_dir, "all_corrs")
+
+    logging.info("Comparing R² values")
+    #R2 comparison result
+    r2_dist_slugs = compare_r2(master_df, return_slugs=True)
+    save_df(pd.DataFrame({"dist_better_slugs": r2_dist_slugs}), out_dir, "r2_dist_slugs")
+
+    logging.info("Spearman comparison")
+    #Spearman comparison result
+    spearman_out = compare_spearman(master_df)
+    # compare_spearman prints internally; nothing to save
+
+    # ------------------------------------------------------------------ #
+    # 2. Case‑study analysis & plots                                     #
+    # ------------------------------------------------------------------ #
+    logging.info("Building case‑study DataFrame")
+    cs_df = create_snob_df(args.img_path, args.feat_path,
+                                case_study=True, normalize=False)
+    cs_df = add_rarity_ranks_to_df(cs_df)
+
+    #Plots for appendix F
+    if not args.no_plots:
+        logging.info("Generating distance‑vs‑rarity plots for each slug")
+        for slug in cs_df["Collection"].unique():
+            plot_one_distance_and_rarity(cs_df, slug, num_quants=20,
+                                              y_axis="count",      metric="mean")
+            plot_one_distance_and_rarity(cs_df, slug, num_quants=20,
+                                              y_axis="sale_price", metric="mean")
+
+    logging.info("Creating case‑study result table")
+    #Tables for appendix E
+    case_results_df = make_case_study_result_df(cs_df)
+    # Filter out 'meebits' collection
+    # Met the criteria of case study collections but we removed because of wash trading (footnote 14)
+    case_results_df = case_results_df.query("Slug != 'meebits'")
+
+    # Save CSV and LaTeX subset
+    save_df(case_results_df, out_dir, "case_study_results")
+
+    latex_cols = [
+        "Slug",
+        "Rarity Correlation",
+        "Rarity Correlation (Count)",
+        "Filt Rarity Correlation",
+    ]
+    latex_str = case_results_df[latex_cols].to_latex(index=False)
+    (out_dir / "case_study_table.tex").write_text(latex_str)
+    logging.info("LaTeX table written → %s", out_dir / "case_study_table.tex")
+
+    logging.info("SNOB pipeline complete")
+
+
+if __name__ == "__main__":
+    main()
         

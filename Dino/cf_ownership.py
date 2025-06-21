@@ -2,6 +2,7 @@ import counterfeit_utils as cfu
 import pandas as pd
 import sys
 sys.path.append("..")
+import feature_extract
 import data_retrieval.opensea_methods as opse
 import numpy as np
 import seaborn as sns
@@ -9,6 +10,12 @@ import matplotlib.pyplot as plt
 import tqdm as tqdm
 import data_retrieval.psql_methods as psql
 import pickle
+from sklearn.linear_model import LinearRegression
+from scipy import stats
+import torch
+import misc_utils.feature_utils as feat
+from scipy.stats import pearsonr
+import math
 
 DATASET_SIZE = 10976
 
@@ -395,3 +402,106 @@ def get_ownership_stats_no_db(df,top_slug,der_list,look_sims):
     ratio_ll = perc_ll/exp_perc_ll
     ratio_ll_no_dupe = perc_ll_no_dupe/exp_perc_ll
     return perc_ll,perc_ll_no_dupe,exp_perc_ll,ratio_ll,ratio_ll_no_dupe
+
+#-----------------Methods for ownership correlation aesthetic analysis-------------------
+
+
+def compute_count_vis_pearson(
+    df, target,remove_ders=True,log_vals = False        # <–– NEW flag
+):
+    """If `equal_counts=True` bins are sized so every bin has ~the same # points."""
+    # 1. locate reference
+    ref_row   = df.loc[df['Collection'] == target].iloc[0]
+    ref_vec   = np.asarray(ref_row['AverageFeatureVector'])
+    overlaps = cfu.count_non_top_overlaps(target)
+    if log_vals:
+        overlaps['row_count'] = np.log1p(overlaps['row_count'])
+    df = df.merge(
+    overlaps.rename(columns={'slug':'Collection'}),
+    on='Collection',
+    how='left'
+    )
+    if remove_ders:
+        der_list = cfu.der_list_from_db(target)
+        print(der_list)
+        df = df.query(f"Collection not in {der_list}")
+    df['row_count'] = df['row_count'].fillna(0).astype(float)
+    df['quantile'] = df['row_count'].rank(pct=True)
+    # 2. compute x & y
+    M     = np.vstack(df['AverageFeatureVector'].apply(np.asarray).values)
+    x     = np.linalg.norm(M - ref_vec, axis=1)        # distance      # Δ price
+    X_price = df[['avg_price']].values.reshape(-1, 1)
+    y_dist  = x
+
+    lm_dist = LinearRegression().fit(X_price, y_dist)
+    pred_dist = lm_dist.predict(X_price)
+    resid_dist = y_dist - pred_dist
+
+    # 2. Fit counts ~ price, get residuals
+    y_count = df['row_count'].values
+
+    lm_count = LinearRegression().fit(X_price, y_count)
+    pred_count = lm_count.predict(X_price)
+    resid_count = y_count - pred_count
+    #compute pearson correlation
+    corr_partial = pd.Series(resid_dist).corr(pd.Series(resid_count))
+    r = corr_partial
+    n = len(df)  
+    df_dof = n - 3                           # since we controlled for 1 variable (price), df = n - 3
+
+    # Compute the t‐statistic for the partial correlation
+    t_stat = r * np.sqrt(df_dof / (1 - r**2))
+
+    # Two‐tailed p‐value
+    p_val = 2 * (1 - stats.t.cdf(np.abs(t_stat), df=df_dof))
+    corr_pearson,p_val_pear = pearsonr(y_dist, y_count)
+    return corr_partial,p_val,corr_pearson,p_val_pear
+
+def get_slice_range(total_items, job_id, num_jobs):
+    # split into num_jobs even chunks (last chunk may be smaller)
+    per_job = math.ceil(total_items / num_jobs)
+    start = job_id * per_job
+    end   = min(start + per_job, total_items)
+    return start, end
+
+def compute_all_ownership_corrs(job_id=None,num_jobs=None):
+    model_string = 'dinov2_vits14'
+    data_path = '/global/scratch/tlundy/NFT_Research/nft_research/Dino/images_features/counterfeit_images'
+    out_path = f'/global/scratch/tlundy/NFT_Research/nft_research/Dino/images_features/counterfeit_features/{model_string}'
+    feature_path = out_path+'/testfeat.pth'
+    features = torch.load(feature_path)
+    labels = feature_extract.get_labels(data_path)
+    file_names = feature_extract.get_filenames(data_path)
+    features_list = features.tolist()
+    # Create a pandas DataFrame
+    data = {'Label': labels.tolist(), 'Features': features_list,'Collection':[x[0] for x in file_names],
+            'NFT_num':[x[1] for x in file_names]}
+    df = pd.DataFrame(data)
+    df = feat.compute_average_vector(df,column='Label')
+    df2 = pd.read_pickle('archive/graph_images_dataframe.pkl')
+    df_combined = pd.concat([df, df2], ignore_index=True)
+    df_combined = df_combined.drop_duplicates(subset=['Collection'])
+    del(df)
+    del(df2)
+    command = "Select * from collection_total_stats"
+    temp_stats_tuples = psql.execute_commands([command])
+    df_stats = pd.DataFrame(temp_stats_tuples,columns = ['volume','sales', 'avg_price','num_owners','market_cap','floor','symbol','Collection'])
+    #merge df_combined with df_stats on Collection
+    df_combined = df_combined.merge(df_stats, on='Collection', how='left')
+    #drop rows with missing values in the stats columns
+    df_combined = df_combined.dropna(subset=['volume', 'sales', 'avg_price', 'num_owners', 'market_cap', 'floor'])
+    top_slugs = df_combined['Collection'].unique()
+    if job_id is not None:
+        slice_range = get_slice_range(len(top_slugs), job_id, num_jobs)
+        top_slugs = top_slugs[slice_range[0]:slice_range[1]]
+    results = []
+    for slug in top_slugs:
+        try:
+            results.append((slug,compute_count_vis_pearson(df_combined, slug,remove_ders=False)))
+            print(slug,compute_count_vis_pearson(df_combined, slug,remove_ders=False))
+        except:
+            print(slug, "Error computing Pearson correlation")
+            continue
+    results_df = pd.DataFrame(results, columns=['Collection', 'Pearson_Correlation'])
+    return results_df
+    

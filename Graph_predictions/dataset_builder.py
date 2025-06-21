@@ -17,6 +17,7 @@ from collections import defaultdict
 import pickle
 import os.path as osp
 from random import Random
+import numpy as np
 
 def generate_dataset(run_name, max_graph_size=2000,owner_sample=100,num_graphs=20,process=True):
     # Specify the directory path
@@ -33,7 +34,9 @@ def generate_dataset(run_name, max_graph_size=2000,owner_sample=100,num_graphs=2
     label_map = defaultdict(lambda: len(label_map) + 1)
     wallets = list(glo_label_to_owners.values())
     merged = list(itertools.chain.from_iterable(wallets))
-    """A technical note on the random sampling: Grabbing a large list of collection slugs is not straightforward. There is no API endpoint that contains a master list afaik. One can monitor the 'Event' api but this is slow and biased towards frequently traded NFTs. Another option is to get a large list of 'wallets' sample wallets randomly and then grab all collection owned by them. We use this second method. In order to get large list of wallets we begin with a small number of popular collections via webcrawling, we get a list of all owners of these this small set, we then get a list of all NFTs owned by these wallets, and finally get a large list of wallets who own this new set of NFTs. This set of wallets is now too large to expand out completely so we repeatedly sub sample wallets and build out their owned NFTs. This results in our master list of NFTs used for the large dataset. This tevhnically biases away from NFT collection which are owned by few wallets in the "central cluster"."""
+    """A technical note on the random sampling: Grabbing a large list of collection slugs is not straightforward. There is no API endpoint that contains a master list afaik. One can monitor the 'Event' api but this is slow and biased towards frequently traded NFTs. Another option is to get a large list of 'wallets' sample wallets randomly and then grab all collection owned by them. 
+    We use this second method. In order to get large list of wallets we begin with a small number of popular collections via webcrawling, we get a list of all owners of these this small set, we then get a list of all NFTs owned by these wallets, and finally get a large list of wallets who own this new set of NFTs. This set of wallets is now too large to expand out completely so we repeatedly sub sample wallets and build out their owned NFTs. This results in our master list of NFTs used for the large dataset. 
+    This technically biases away from NFT collection which are owned by few wallets in the "central cluster".  """
     for x in range(0,num_graphs):
         #Randomly select owner_sample num wallets
         select_wallets = random.sample(merged, owner_sample)
@@ -75,8 +78,8 @@ def generate_dataset(run_name, max_graph_size=2000,owner_sample=100,num_graphs=2
         label_to_owners.update(already_completed_owners)
         total_owners.update(label_to_owners)
 
-        G = make_bipartite_graph(label_to_owners,label_to_stats,label_map,bin=False)
-        graph = input_from_networkx(G)
+        G = graph_utils.make_bipartite_graph(label_to_owners,label_to_stats,label_map,bin=False)
+        graph = network_utils.input_from_networkx(G)
         del G
         out_path = f'dataset_stor/{run_name}/graphs/graph_{x+1}.pt'
         torch.save(graph,out_path)

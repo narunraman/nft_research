@@ -336,18 +336,22 @@ def sample_intervals(top_slug,start,stop,num_intervals,interval,num_samples=1):
         tot_intervals.append(intervals)
     return tot_intervals
 
-def day_sales_from_db(slug):
-    sales = sales_from_db(slug)
+def day_sales_from_db(slug,look_sim=False):
+    sales = sales_from_db(slug,look_sim=look_sim)
     day_sales = timestamps_to_dates(sales)
     df_sales = pd.DataFrame(day_sales,columns=['day','price'])
     df_sales['day'] = pd.to_datetime(df_sales['day'])
     return df_sales
 
-def sales_from_db(slug=None):
-    if slug:
-        command = f"select timestamp,sale_price from cf_sales where slug='{slug}' and (payment_token='WETH' or payment_token='ETH')"
+def sales_from_db(slug=None,look_sim=False):
+    if look_sim:
+        table = 'look_sim_sales'
     else:
-        command = f"select timestamp,sale_price,slug from cf_sales where (payment_token='WETH' or payment_token='ETH')"
+        table = 'cf_sales'
+    if slug:
+        command = f"select timestamp,sale_price from {table} where slug='{slug}' and (payment_token='WETH' or payment_token='ETH')"
+    else:
+        command = "select timestamp,sale_price,slug from cf_sales where (payment_token='WETH' or payment_token='ETH')"
     data = psql.execute_commands([command])
     return data
 
@@ -415,7 +419,7 @@ def value_comparison(slug,interval_length,num_samples,db_name='objective_cf_num'
     mean_samples = build_sample_dist(sampled_intervals)
     data = [x for x in y if not np.isnan(x)]
     mean_data = np.mean(data)
-    return (slug,mean_samples,mean_data)
+    return (slug,mean_samples,data)
     
 def plot_paired_cdfs(top_slug,sampled_intervals,real_intervals,interval_length,saved=True):
     data = [j[1][1]-j[1][0] for j in sampled_intervals[0]]
@@ -475,3 +479,110 @@ def get_look_sims(top_slug,remove_ders=True):
         df = df.query(f"slug not in {der_list}")
     slugs = df[['slug']].drop_duplicates()['slug'].to_list()
     return slugs
+
+#-------- overlap counts for non-top slugs ----------------
+
+def count_non_top_overlaps(slug):
+    df = get_slug_owners(slug)
+    df = df.query("address!='0x000000000000000000000000000000000000dEaD'")
+    row_counts = df.groupby(['slug'])['address'].count().reset_index(name='row_count')
+    return row_counts
+
+#-------- new value comparison code with no overlaps ----------------
+def value_comparison_no_overlap(slug,interval_length,db_name='objective_cf_num',logger=None,no_overlap=True,only_tops=False):
+    if logger:
+            logger.info(slug)
+    intervals,num_cf = compute_all_intervals_no_overlap(slug,interval_length,db_name,no_overlap=no_overlap,only_tops=only_tops)
+    y = [j[3][1]-j[3][0] for j in intervals]
+    sampled_intervals = sample_intervals_no_overlap(slug,intervals,interval_length,no_overlap=no_overlap)
+    if sampled_intervals is None:
+        print(f"Skipping slug {slug} due to lack of sampled intervals")
+        return None
+
+    no_ko_days = [j[1][1]-j[1][0] for j in sampled_intervals]
+    no_ko_days = [x for x in no_ko_days if not np.isnan(x)]
+    ko_days = [x for x in y if not np.isnan(x)]
+    return (slug,no_ko_days,ko_days)
+
+def sample_intervals_no_overlap(top_slug,intervals,interval_length,no_overlap=True):
+    tot_intervals = []
+    df = day_sales_from_db(top_slug)
+    unique_values = np.array(sorted(df['day'].unique()))
+    ko_days = [pd.to_datetime(x[2]) for x in intervals]
+    print("Number of KO Days: ",len(ko_days))
+    
+    exclude_windows = [
+        (kd - pd.Timedelta(days=3), kd + pd.Timedelta(days=interval_length))
+        for kd in ko_days
+    ]
+
+    for day in unique_values:
+        # turn to pandas Timestamp for easy comparison
+        ts = pd.to_datetime(day)
+        # check if ts falls in ANY exclusion window
+        in_exclusion = any(start <= ts <= end for start, end in exclude_windows)
+        if no_overlap:
+            if not in_exclusion:
+                interval = compute_interval(interval_length, ts, df)
+                tot_intervals.append((day,interval))
+        else:
+            # if no overlap is not required, just compute the interval
+            interval = compute_interval(interval_length, ts, df)
+            tot_intervals.append((day,interval))
+    print("Number of no ko days: ",len(tot_intervals))
+    return tot_intervals
+
+def compute_all_intervals_no_overlap(top_slug, interval, db_name, remove_ders=True,no_overlap=True,only_tops=False):
+    # 1. load total count for slug
+    command = f"SELECT num FROM {db_name} WHERE slug = '{top_slug}'"
+    num_cf = psql.execute_commands([command])[0][0]
+
+    # 2. gather all candidates with their creation window
+    if only_tops:
+        slugs = get_top_slugs(cut_off=CUT_OFF, db_name=DB_NAME)
+    else:
+        slugs = get_look_sims(top_slug, remove_ders=remove_ders)
+    print(slugs)
+    sale_df = day_sales_from_db(top_slug)
+    candidates = []
+    for slug in slugs:
+        try:
+            creation = pd.to_datetime(creation_date_from_db(slug))
+            vol      = volume_from_db(slug)
+            start    = creation - pd.Timedelta(days=3)
+            end      = creation + pd.Timedelta(days=interval)
+            candidates.append({
+                "slug": slug,
+                "volume": vol,
+                "creation": creation,
+                "start": start,
+                "end": end
+            })
+        except Exception:
+            print(f"No creation data for slug {slug}")
+
+    # 3. sort by volume, high to low
+    candidates.sort(key=lambda x: x["volume"], reverse=True)
+
+    # 4. greedy pick: keep if no overlap with already-selected windows
+    selected = []
+    for c in candidates:
+        if no_overlap:
+            if not any(
+                (c["start"] <= s["end"]) and (s["start"] <= c["end"])
+                for s in selected
+            ):
+                # only now compute your interval
+                iv = compute_interval(interval, c["creation"], sale_df)
+                selected.append({**c, "interval": iv})
+        else:
+            # if no overlap is not required, just compute the interval
+            iv = compute_interval(interval, c["creation"], sale_df)
+            selected.append({**c, "interval": iv})
+
+    # 5. format output
+    intervals_no_overlap = [
+        (s["slug"], s["volume"], s["creation"], s["interval"])
+        for s in selected
+    ]
+    return intervals_no_overlap, num_cf

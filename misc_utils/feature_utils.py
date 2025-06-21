@@ -1,7 +1,7 @@
 import sys
 sys.path.append("..")
-from psql_methods import execute_commands
-from opensea_methods import *
+from data_retrieval.psql_methods import execute_commands
+from data_retrieval.opensea_methods import *
 import networkx as nx
 import matplotlib.pyplot as plt
 import pickle

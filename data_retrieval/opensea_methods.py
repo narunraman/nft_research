@@ -8,6 +8,7 @@ import data_retrieval.request_helpers as req
 from data_retrieval.psql_methods import execute_commands,batch_insert
 
 API_KEYS = ("c113e12504b14e0185b714dcd72d6110", "55544646a70c491c80991e0666e7dbf6","507741952944434a9234438b7707b358")
+#List of NFT collections to be excluded from the analysis
 SKIP_LIST=['ens','base-introduced','fundrop-pass','gemesis','apecoin','dai-stablecoin','uniswap','1inch-token','rarible','emblem-vault','sewerpass','clonex-mintvial','sorare']
 
 
